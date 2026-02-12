@@ -4,6 +4,470 @@ let selectedSearchVerses = [];
 let memoryWords = [];
 let memorySelectedWords = [];
 
+// ==================== 资源管理系统 ====================
+
+// 检查资源是否足够
+function hasEnoughResources(cost) {
+    const res = GameState.resources;
+    return (!cost.faith || res.faith >= cost.faith) &&
+           (!cost.supplies || res.supplies >= cost.supplies) &&
+           (!cost.influence || res.influence >= cost.influence);
+}
+
+// 消耗资源
+function consumeResources(cost) {
+    if (!hasEnoughResources(cost)) return false;
+    
+    if (cost.faith) GameState.resources.faith -= cost.faith;
+    if (cost.supplies) GameState.resources.supplies -= cost.supplies;
+    if (cost.influence) GameState.resources.influence -= cost.influence;
+    
+    // 检查Faith归零
+    if (GameState.resources.faith <= 0) {
+        triggerFastingPrayer();
+        return 'fasting';
+    }
+    
+    updateResourceDisplay();
+    saveGame();
+    return true;
+}
+
+// 增加资源
+function addResources(rewards) {
+    if (rewards.faith) GameState.resources.faith = Math.min(100, GameState.resources.faith + rewards.faith);
+    if (rewards.supplies) GameState.resources.supplies = Math.min(100, GameState.resources.supplies + rewards.supplies);
+    if (rewards.influence) GameState.resources.influence = Math.min(100, GameState.resources.influence + rewards.influence);
+    
+    updateResourceDisplay();
+    saveGame();
+}
+
+// 更新资源显示
+function updateResourceDisplay() {
+    // 如果在地图界面，更新资源条
+    const resourceBar = document.getElementById('resource-bar');
+    if (resourceBar) {
+        resourceBar.innerHTML = `
+            <div class="resource-item">
+                <span class="resource-icon">✝</span>
+                <span class="resource-value">${GameState.resources.faith}</span>
+                <span class="resource-label">信念</span>
+            </div>
+            <div class="resource-item">
+                <span class="resource-icon">🍞</span>
+                <span class="resource-value">${GameState.resources.supplies}</span>
+                <span class="resource-label">供给</span>
+            </div>
+            <div class="resource-item">
+                <span class="resource-icon">👥</span>
+                <span class="resource-value">${GameState.resources.influence}</span>
+                <span class="resource-label">影响力</span>
+            </div>
+        `;
+    }
+}
+
+// ==================== 技能系统 ====================
+
+// 获取技能当前属性（根据等级计算）
+function getSkillStats(skillName) {
+    const skill = GameState.skills[skillName];
+    const config = GameData.skillConfig[skillName];
+    const level = skill.level;
+    
+    return {
+        name: config.name,
+        description: config.description,
+        cost: {
+            faith: config.baseCost.faith + (config.scaling.cost * (level - 1)),
+            supplies: config.baseCost.supplies + (config.scaling.cost * (level - 1)),
+            influence: config.baseCost.influence + (config.scaling.cost * (level - 1))
+        },
+        damage: config.baseDamage + (config.scaling.damage * (level - 1)),
+        chance: Math.min(0.99, config.baseChance + (level - 1) * 0.02),
+        heal: config.heal ? {
+            faith: config.heal.faith + ((config.scaling.heal || 0) * (level - 1))
+        } : null,
+        level: level,
+        exp: skill.exp,
+        maxExp: skill.maxExp
+    };
+}
+
+// 增加技能经验
+function addSkillExp(skillName, amount) {
+    const skill = GameState.skills[skillName];
+    skill.exp += amount;
+    
+    // 检查升级
+    if (skill.exp >= skill.maxExp) {
+        skill.level++;
+        skill.exp = skill.exp - skill.maxExp;
+        skill.maxExp = Math.floor(skill.maxExp * 1.5);
+        showHint(`${GameData.skillConfig[skillName].name}技能升级到 ${skill.level} 级！`);
+    }
+    
+    saveGame();
+}
+
+// ==================== 旅行事件系统 ====================
+
+// 触发旅行事件
+function triggerTravelEvent(fromCity, toCity) {
+    // 计算动态难度
+    const targetDifficulty = GameData.difficultySystem.calculateTargetDifficulty(
+        GameState.skills, 
+        GameState.currentCityIndex
+    );
+    
+    // 获取所有事件并计算概率
+    const events = Object.values(GameData.travelEvents);
+    const weightedEvents = events.map(event => ({
+        ...event,
+        currentProbability: GameData.difficultySystem.calculateEventProbability(
+            event, GameState.skills, GameState.resources
+        )
+    }));
+    
+    // 根据概率选择事件
+    const totalWeight = weightedEvents.reduce((sum, e) => sum + e.currentProbability, 0);
+    let random = Math.random() * totalWeight;
+    
+    let selectedEvent = weightedEvents[0];
+    for (const event of weightedEvents) {
+        random -= event.currentProbability;
+        if (random <= 0) {
+            selectedEvent = event;
+            break;
+        }
+    }
+    
+    // 检查是否能应对（资源是否足够）
+    const canHandle = !selectedEvent.requires || hasEnoughResources(selectedEvent.requires);
+    
+    // 显示旅行事件
+    showTravelEventModal(selectedEvent, canHandle, toCity);
+}
+
+// 显示旅行事件弹窗
+function showTravelEventModal(event, canHandle, nextScene) {
+    const modal = document.createElement('div');
+    modal.id = 'travel-event-modal';
+    modal.className = 'modal active';
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 500px;">
+            <h2 style="color: #8b4513; margin-bottom: 20px;">${event.name}</h2>
+            <p style="font-size: 16px; line-height: 1.6; margin-bottom: 20px;">${event.description}</p>
+            <div style="background: #f5f5dc; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <p style="margin: 5px 0;"><strong>预计影响：</strong></p>
+                ${event.effect.faith ? `<p style="margin: 5px 0;">信念：${event.effect.faith > 0 ? '+' : ''}${event.effect.faith}</p>` : ''}
+                ${event.effect.supplies ? `<p style="margin: 5px 0;">供给：${event.effect.supplies > 0 ? '+' : ''}${event.effect.supplies}</p>` : ''}
+                ${event.effect.influence ? `<p style="margin: 5px 0;">影响力：${event.effect.influence > 0 ? '+' : ''}${event.effect.influence}</p>` : ''}
+            </div>
+            ${!canHandle ? '<p style="color: #c41e3a; margin-bottom: 15px;">⚠️ 资源不足，无法完全应对这次事件！</p>' : ''}
+            <div class="modal-buttons" style="display: flex; gap: 10px; justify-content: center;">
+                <button id="btn-accept-event" class="btn-primary">依靠信心前行</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // 绑定事件
+    document.getElementById('btn-accept-event').addEventListener('click', () => {
+        // 应用事件效果
+        addResources(event.effect);
+        
+        // 移除弹窗
+        modal.remove();
+        
+        // 继续前往下一个场景
+        loadScene(nextScene);
+    });
+}
+
+// ==================== 属灵争战系统 ====================
+
+// 初始化战斗
+function initSpiritualBattle(enemyId) {
+    const enemyTemplate = GameData.spiritualBattles[enemyId];
+    const targetDifficulty = GameData.difficultySystem.calculateTargetDifficulty(
+        GameState.skills,
+        GameState.currentCityIndex
+    );
+    
+    // 根据动态难度缩放敌人
+    const enemy = GameData.difficultySystem.scaleEnemy(enemyTemplate, targetDifficulty);
+    
+    GameState.battleState = {
+        enemy: enemy,
+        enemyCurrentResistance: enemy.resistance,
+        playerCurrentFaith: GameState.resources.faith,
+        turn: 1,
+        log: []
+    };
+    
+    renderBattleScreen();
+}
+
+// 渲染战斗界面
+function renderBattleScreen() {
+    const battle = GameState.battleState;
+    const container = document.getElementById('puzzle-game');
+    
+    container.innerHTML = `
+        <div class="battle-container" style="padding: 20px;">
+            <h2 style="color: #8b4513; margin-bottom: 20px;">属灵争战</h2>
+            <div class="enemy-info" style="background: #f5f5dc; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <h3 style="margin: 0 0 10px 0;">${battle.enemy.name}</h3>
+                <p style="margin: 5px 0; font-size: 14px;">${battle.enemy.description}</p>
+                <div class="resistance-bar" style="margin-top: 10px;">
+                    <div style="background: #ddd; height: 20px; border-radius: 10px; overflow: hidden;">
+                        <div style="background: #c41e3a; height: 100%; width: ${(battle.enemyCurrentResistance / battle.enemy.resistance) * 100}%; transition: width 0.3s;"></div>
+                    </div>
+                    <p style="text-align: center; margin: 5px 0; font-size: 12px;">阻力值：${battle.enemyCurrentResistance}/${battle.enemy.resistance}</p>
+                </div>
+            </div>
+            
+            <div class="player-status" style="display: flex; justify-content: space-around; margin-bottom: 20px; font-size: 14px;">
+                <span>信念：${GameState.resources.faith}/100</span>
+                <span>供给：${GameState.resources.supplies}</span>
+                <span>影响力：${GameState.resources.influence}</span>
+            </div>
+            
+            <div class="skills-container" style="display: flex; gap: 10px; justify-content: center; margin-bottom: 20px;">
+                ${renderSkillButton('debate')}
+                ${renderSkillButton('miracle')}
+                ${renderSkillButton('endurance')}
+            </div>
+            
+            <div class="battle-log" style="background: #fff; padding: 10px; border-radius: 8px; max-height: 150px; overflow-y: auto; font-size: 14px; line-height: 1.5;">
+                ${battle.log.map(entry => `<p style="margin: 3px 0;">${entry}</p>`).join('')}
+            </div>
+        </div>
+    `;
+    
+    showScreen('puzzle-game');
+}
+
+// 渲染技能按钮
+function renderSkillButton(skillName) {
+    const stats = getSkillStats(skillName);
+    const canUse = hasEnoughResources(stats.cost);
+    
+    return `
+        <button class="skill-btn ${!canUse ? 'disabled' : ''}" data-skill="${skillName}" 
+                style="padding: 10px 15px; font-size: 14px; ${!canUse ? 'opacity: 0.5;' : ''}"
+                ${!canUse ? 'disabled' : ''}>
+            <strong>${stats.name}</strong> (Lv.${stats.level})
+            <br><small>${stats.description}</small>
+            <br><small style="color: #666;">
+                ${stats.cost.faith ? `信念-${stats.cost.faith} ` : ''}
+                ${stats.cost.supplies ? `供给-${stats.cost.supplies} ` : ''}
+                ${stats.cost.influence ? `影响力-${stats.cost.influence} ` : ''}
+                | 伤害${stats.damage} | 成功率${Math.floor(stats.chance * 100)}%
+            </small>
+        </button>
+    `;
+}
+
+// 执行战斗回合
+function executeBattleTurn(skillName) {
+    const battle = GameState.battleState;
+    const stats = getSkillStats(skillName);
+    
+    // 消耗资源
+    const result = consumeResources(stats.cost);
+    if (result === 'fasting') return;  // Faith归零，进入禁食祷告
+    if (!result) {
+        showHint('资源不足！');
+        return;
+    }
+    
+    // 判定是否命中
+    const hit = Math.random() < stats.chance;
+    
+    if (hit) {
+        // 计算伤害（弱点有加成）
+        let damage = stats.damage;
+        if (battle.enemy.weakness && battle.enemy.weakness.includes(skillName)) {
+            damage = Math.floor(damage * 1.5);
+            battle.log.push(`✨ ${stats.name}击中弱点！造成 ${damage} 点伤害！`);
+        } else {
+            battle.log.push(`✓ ${stats.name}成功！造成 ${damage} 点伤害。`);
+        }
+        
+        battle.enemyCurrentResistance -= damage;
+        
+        // 如果有治疗效果
+        if (stats.heal) {
+            addResources(stats.heal);
+            battle.log.push(`❤️ 恢复了 ${stats.heal.faith} 点信念！`);
+        }
+        
+        // 增加技能经验
+        addSkillExp(skillName, 10);
+    } else {
+        battle.log.push(`✗ ${stats.name}未命中...`);
+    }
+    
+    // 检查战斗结束
+    if (battle.enemyCurrentResistance <= 0) {
+        // 胜利
+        const rewards = battle.enemy.rewards;
+        battle.log.push(`🎉 战斗胜利！获得 ${rewards.exp} 经验值和 ${rewards.influence} 影响力！`);
+        addResources({ influence: rewards.influence });
+        
+        // 延迟后返回场景
+        setTimeout(() => {
+            GameState.battleState = null;
+            const scene = GameData.scenes[currentScene];
+            if (scene.gameData && scene.gameData.next) {
+                loadScene(scene.gameData.next);
+            } else {
+                showScreen('map-screen');
+            }
+        }, 2000);
+        return;
+    }
+    
+    // 敌人反击
+    const enemyDamage = Math.floor(5 + Math.random() * 10);
+    GameState.resources.faith -= enemyDamage;
+    battle.log.push(`💔 ${battle.enemy.name}反击！失去 ${enemyDamage} 点信念。`);
+    
+    // 检查Faith归零
+    if (GameState.resources.faith <= 0) {
+        GameState.resources.faith = 0;
+        saveGame();
+        triggerFastingPrayer();
+        return;
+    }
+    
+    battle.turn++;
+    saveGame();
+    renderBattleScreen();
+}
+
+// ==================== 禁食祷告系统 ====================
+
+// 触发禁食祷告
+function triggerFastingPrayer() {
+    const tasks = GameData.fastingPrayer.tasks;
+    const selectedTask = tasks[Math.floor(Math.random() * tasks.length)];
+    
+    GameState.fastingState = {
+        task: selectedTask,
+        startTime: Date.now(),
+        completed: false
+    };
+    
+    showFastingPrayerModal();
+}
+
+// 显示禁食祷告界面
+function showFastingPrayerModal() {
+    const fasting = GameState.fastingState;
+    const task = fasting.task;
+    
+    const modal = document.createElement('div');
+    modal.id = 'fasting-modal';
+    modal.className = 'modal active';
+    
+    let taskHTML = '';
+    if (task.type === 'memory_verse') {
+        taskHTML = `
+            <p style="font-size: 18px; margin-bottom: 20px;">${task.description}</p>
+            <input type="text" id="fasting-answer" placeholder="请输入答案..." style="padding: 10px; font-size: 16px; width: 200px;">
+            <button id="btn-submit-fasting" class="btn-primary" style="margin-left: 10px;">确认</button>
+        `;
+    } else if (task.type === 'click_prayer') {
+        taskHTML = `
+            <p style="font-size: 18px; margin-bottom: 20px;">${task.description}</p>
+            <button id="btn-prayer-click" class="btn-primary" style="padding: 20px 40px; font-size: 18px;">
+                🙏 祷告 (<span id="prayer-count">0</span>/${task.clicks})
+            </button>
+        `;
+    } else if (task.type === 'quiet_wait') {
+        taskHTML = `
+            <p style="font-size: 18px; margin-bottom: 20px;">${task.description}</p>
+            <div style="font-size: 48px; color: #8b4513;" id="fasting-timer">${task.duration}</div>
+            <p style="margin-top: 10px; color: #666;">请保持安静，等待倒计时结束...</p>
+        `;
+    }
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 500px; text-align: center;">
+            <h2 style="color: #c41e3a; margin-bottom: 20px;">禁食祷告</h2>
+            <p style="font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
+                你的信念已经耗尽，需要通过禁食祷告重新得力。
+                <br>完成以下任务来恢复你的信念：
+            </p>
+            <div style="background: #f5f5dc; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h3 style="margin: 0 0 15px 0; color: #8b4513;">${task.name}</h3>
+                ${taskHTML}
+            </div>
+            <p style="color: #666; font-size: 14px;">完成后将恢复 ${GameData.fastingPrayer.baseRecovery.faith} 点信念</p>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // 绑定任务交互
+    if (task.type === 'memory_verse') {
+        document.getElementById('btn-submit-fasting').addEventListener('click', () => {
+            const answer = document.getElementById('fasting-answer').value.trim();
+            if (answer === task.answer) {
+                completeFastingPrayer();
+            } else {
+                alert('答案不正确，请再想一想。提示：使徒行传14:22');
+            }
+        });
+    } else if (task.type === 'click_prayer') {
+        let count = 0;
+        const btn = document.getElementById('btn-prayer-click');
+        btn.addEventListener('click', () => {
+            count++;
+            document.getElementById('prayer-count').textContent = count;
+            if (count >= task.clicks) {
+                completeFastingPrayer();
+            }
+        });
+    } else if (task.type === 'quiet_wait') {
+        let timeLeft = task.duration;
+        const timer = setInterval(() => {
+            timeLeft--;
+            document.getElementById('fasting-timer').textContent = timeLeft;
+            if (timeLeft <= 0) {
+                clearInterval(timer);
+                completeFastingPrayer();
+            }
+        }, 1000);
+    }
+}
+
+// 完成禁食祷告
+function completeFastingPrayer() {
+    GameState.fastingState.completed = true;
+    
+    // 恢复资源
+    addResources(GameData.fastingPrayer.baseRecovery);
+    
+    // 移除弹窗
+    const modal = document.getElementById('fasting-modal');
+    if (modal) modal.remove();
+    
+    showHint('禁食祷告完成！你的信念已经恢复，可以继续前行了。');
+    
+    // 如果之前有战斗，返回战斗；否则返回地图
+    if (GameState.battleState) {
+        renderBattleScreen();
+    } else {
+        showScreen('map-screen');
+    }
+}
+
 // 初始化游戏
 document.addEventListener('DOMContentLoaded', function() {
     initGame();
@@ -189,6 +653,9 @@ function updateMapProgress() {
             currentMarker.classList.add('current');
         }
     }
+    
+    // 更新资源显示
+    updateResourceDisplay();
 }
 
 // 处理城市点击
@@ -257,7 +724,34 @@ function loadScene(sceneId) {
             loadMemoryGame(scene);
             break;
         case 'puzzle':
-            loadPuzzleGame(scene);
+            // 将解谜改为属灵争战
+            if (scene.gameData && scene.gameData.battleEnemy) {
+                initSpiritualBattle(scene.gameData.battleEnemy);
+                // 绑定技能按钮事件
+                setTimeout(() => {
+                    document.querySelectorAll('.skill-btn').forEach(btn => {
+                        btn.addEventListener('click', (e) => {
+                            const skillName = e.currentTarget.dataset.skill;
+                            executeBattleTurn(skillName);
+                        });
+                    });
+                }, 100);
+            } else {
+                // 兼容旧版，使用原有解谜
+                loadPuzzleGame(scene);
+            }
+            break;
+        case 'spiritual_battle':
+            // 新的属灵争战类型
+            initSpiritualBattle(scene.gameData.battleEnemy);
+            setTimeout(() => {
+                document.querySelectorAll('.skill-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const skillName = e.currentTarget.dataset.skill;
+                        executeBattleTurn(skillName);
+                    });
+                });
+            }, 100);
             break;
         case 'quiz':
             startQuiz();
@@ -323,17 +817,26 @@ function handleChoice(choice) {
         GameState.totalScore += choice.score;
     }
     
-    // 检查是否完成城市
-    const currentCity = GameData.scenes[currentScene].city;
+    // 检查是否前往下一个城市
+    const currentSceneData = GameData.scenes[currentScene];
+    const currentCity = currentSceneData.city;
     const nextScene = GameData.scenes[choice.next];
     
     if (nextScene && nextScene.city !== currentCity) {
+        // 在城市间移动，触发旅行事件
         completeCity(currentCity);
         updateMapProgress();
+        
+        // 更新城市索引
+        const cityOrder = ['antioch', 'cyprus', 'pisidian', 'iconium', 'lystra', 'derbe', 'return'];
+        GameState.currentCityIndex = cityOrder.indexOf(nextScene.city);
+        
+        // 触发旅行事件
+        triggerTravelEvent(currentCity, choice.next);
+    } else {
+        // 同城市内移动，直接加载场景
+        loadScene(choice.next);
     }
-    
-    // 加载下一个场景
-    loadScene(choice.next);
 }
 
 // 处理下一步

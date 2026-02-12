@@ -243,6 +243,40 @@ button {
     color: #8b7355;
 }
 
+/* 资源条样式 */
+.resource-bar {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    background: #f5f5dc;
+    padding: 8px 15px;
+    border-radius: 20px;
+    margin: 0 15px;
+}
+
+.resource-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 14px;
+}
+
+.resource-icon {
+    font-size: 16px;
+}
+
+.resource-value {
+    font-weight: bold;
+    color: #5c4033;
+    min-width: 25px;
+    text-align: center;
+}
+
+.resource-label {
+    color: #8b7355;
+    font-size: 12px;
+}
+
 .map-container {
     flex: 1;
     display: flex;

@@ -250,12 +250,25 @@ const GameData = {
             id: "iconium_persecution",
             city: "iconium",
             title: "坚定信心",
-            text: "你们住了多日，倚靠主放胆讲道；主借他们的手施行神迹奇事，证明他的恩道。城中的众人就分裂了，有附从犹太人的，有附从使徒的。外邦人和犹太人同他们的官长要凌辱使徒，用石头打他们。",
+            text: "你们住了多日，倚靠主放胆讲道；主借他们的手施行神迹奇事，证明他的恩道。城中的众人就分裂了，有附从犹太人的，有附从使徒的。外邦人和犹太人同他们的官长要凌辱使徒，用石头打他们。一场属灵的争战正在酝酿...",
             verse: null,
             choices: [
-                { text: "逃往路司得", next: "lystra_arrive", score: 10 }
+                { text: "进入属灵争战", next: "iconium_battle", score: 10 }
             ],
             type: "dialog"
+        },
+        iconium_battle: {
+            id: "iconium_battle",
+            city: "iconium",
+            title: "以哥念的逼迫",
+            text: "面对犹太人的逼迫，保罗和巴拿巴必须运用智慧和忍耐来应对这场属灵争战。",
+            verse: null,
+            choices: [],
+            type: "spiritual_battle",
+            gameData: {
+                battleEnemy: "persecution",
+                next: "lystra_arrive"
+            }
         },
 
         // 路司得
@@ -273,22 +286,13 @@ const GameData = {
         lystra_puzzle: {
             id: "lystra_puzzle",
             city: "lystra",
-            title: "解谜挑战",
-            text: "保罗看见这个瘸腿的人有信心，决定医治他。但这个场景有几个关键要素，你能找出来吗？",
+            title: "医治瘸腿的人",
+            text: "保罗看见这个瘸腿的人有信心，决定医治他。但这件事引起了众人的误解，你需要用神迹和耐心来应对这突如其来的属灵争战。",
             verse: null,
             choices: [],
-            type: "puzzle",
+            type: "spiritual_battle",
             gameData: {
-                question: "医治后，这个瘸腿的人做了什么动作？",
-                story: "保罗在路司得遇见一个生来瘸腿的人，这人从来没有走过路。保罗对他说：'你起来，两脚站直！'",
-                clues: [
-                    "保罗对他说了什么？（提示：两个字）",
-                    "那人听了之后立刻做出什么反应？（提示：向上）",
-                    "之后他就能做什么了？（提示：移动）"
-                ],
-                answers: ["跳起来行走", "跳起来", "起来行走", "行走", "站起来行走", "起来走"],
-                hint: "答案包含两个连续的动作：先向上跳起，然后开始行走。参考使徒行传14:10",
-                passText: "正确！保罗说：'你起来，两脚站直！'那人就跳起来，而且行走。",
+                battleEnemy: "idolatry",
                 next: "lystra_crowd"
             }
         },
@@ -317,13 +321,26 @@ const GameData = {
         lystra_stoning: {
             id: "lystra_stoning",
             city: "lystra",
-            title: "被石头打",
-            text: "但有些犹太人从安提阿和以哥念来，挑唆众人，就用石头打保罗，以为他是死了，便拖到城外。门徒正围着他，他就起来，走进城去。",
+            title: "被石头打的试炼",
+            text: "但有些犹太人从安提阿和以哥念来，挑唆众人，就用石头打保罗。这是属灵旅程中最严峻的试炼，唯有忍耐和祷告才能度过。",
             verse: "acts14_19",
             choices: [
-                { text: "第二天前往特庇", next: "derbe_arrive", score: 10 }
+                { text: "进入属灵争战", next: "lystra_stoning_battle", score: 10 }
             ],
             type: "dialog"
+        },
+        lystra_stoning_battle: {
+            id: "lystra_stoning_battle",
+            city: "lystra",
+            title: "石头的试炼",
+            text: "石头如雨点般落下，这是最残酷的逼迫。保罗必须用忍耐承受，用信心得胜。",
+            verse: null,
+            choices: [],
+            type: "spiritual_battle",
+            gameData: {
+                battleEnemy: "stoning",
+                next: "derbe_arrive"
+            }
         },
 
         // 特庇
@@ -420,6 +437,212 @@ const GameData = {
         }
     ],
 
+    // 旅行事件系统
+    travelEvents: {
+        smoothSailing: {
+            id: 'smoothSailing',
+            name: '顺风顺水',
+            description: '圣灵赐下顺风，船只航行顺利。船员们士气高涨，你利用这段时间研读经文。',
+            effect: { supplies: -5, faith: 5, influence: 0 },
+            baseProbability: 0.35,
+            difficulty: 1
+        },
+        gentleChallenge: {
+            id: 'gentleChallenge',
+            name: '小风浪',
+            description: '途中遇到轻微风浪，船只颠簸不定。需要额外消耗供给来维持航行。',
+            effect: { supplies: -12, faith: -3, influence: 0 },
+            baseProbability: 0.25,
+            difficulty: 2
+        },
+        storm: {
+            id: 'storm',
+            name: '海上风暴',
+            description: '突如其来的风暴让船只陷入危险！船员们惊慌失措，需要你以坚定的信念稳定人心。',
+            effect: { supplies: -20, faith: -15, influence: 0 },
+            requires: { faith: 20 },
+            baseProbability: 0.20,
+            difficulty: 3
+        },
+        bandits: {
+            id: 'bandits',
+            name: '路遇强盗',
+            description: '途中遭遇强盗拦路！他们要求交出所有财物，你需要运用智慧化解危机。',
+            effect: { supplies: -25, faith: -5, influence: -10 },
+            requires: { influence: 15 },
+            baseProbability: 0.15,
+            difficulty: 4
+        },
+        shipwreck: {
+            id: 'shipwreck',
+            name: '船只失事',
+            description: '船只触礁！危急时刻，唯有祷告和强大的影响力才能带领众人脱险。',
+            effect: { supplies: -35, faith: -25, influence: -15 },
+            requires: { faith: 35, influence: 20 },
+            baseProbability: 0.05,
+            difficulty: 5
+        }
+    },
+
+    // 属灵争战系统（替代解谜）
+    spiritualBattles: {
+        // 阻力类型敌人
+        hardenedHearts: {
+            id: 'hardenedHearts',
+            name: '刚硬的心',
+            description: '听众的心刚硬，不愿接受福音',
+            baseResistance: 80,
+            weakness: ['debate', 'miracle'],
+            difficulty: 2
+        },
+        falseProphets: {
+            id: 'falseProphets',
+            name: '假先知',
+            description: '有人抵挡真道，混乱主的正道',
+            baseResistance: 120,
+            weakness: ['miracle', 'debate'],
+            difficulty: 3
+        },
+        persecution: {
+            id: 'persecution',
+            name: '犹太人的逼迫',
+            description: '不顺从的犹太人耸动众人',
+            baseResistance: 150,
+            weakness: ['endurance'],
+            difficulty: 4
+        },
+        idolatry: {
+            id: 'idolatry',
+            name: '偶像崇拜',
+            description: '众人误以为你们是神，要向你献祭',
+            baseResistance: 100,
+            weakness: ['debate', 'endurance'],
+            difficulty: 3
+        },
+        stoning: {
+            id: 'stoning',
+            name: '石头的试炼',
+            description: '有人挑唆众人用石头打你',
+            baseResistance: 180,
+            weakness: ['endurance', 'miracle'],
+            difficulty: 5
+        }
+    },
+
+    // 技能配置
+    skillConfig: {
+        debate: {
+            name: '辩论',
+            description: '用智慧和圣经辩论，说服人心',
+            baseCost: { supplies: 5, faith: 0, influence: 0 },
+            baseDamage: 25,
+            baseChance: 0.90,
+            scaling: { damage: 8, cost: 1 }  // 每级增加8点伤害，1点消耗
+        },
+        miracle: {
+            name: '神迹',
+            description: '施行医治和神迹，彰显神的大能',
+            baseCost: { supplies: 0, faith: 15, influence: 0 },
+            baseDamage: 45,
+            baseChance: 0.75,
+            scaling: { damage: 12, cost: 2 }
+        },
+        endurance: {
+            name: '忍耐',
+            description: '以忍耐和温柔回应，坚固自己',
+            baseCost: { supplies: 0, faith: 8, influence: 5 },
+            baseDamage: 20,
+            baseChance: 0.95,
+            heal: { faith: 15 },
+            scaling: { damage: 5, cost: 1, heal: 3 }
+        }
+    },
+
+    // 动态难度算法
+    difficultySystem: {
+        // 计算玩家技能点总和 S
+        calculateSkillPoints: function(skills) {
+            return Object.values(skills).reduce((total, skill) => {
+                return total + skill.level;
+            }, 0);
+        },
+        
+        // 计算扰动项 σ（基于城市进度的随机波动）
+        calculateSigma: function(cityIndex) {
+            const baseSigma = 0.5;
+            const progressFactor = cityIndex * 0.1;
+            return baseSigma + progressFactor + (Math.random() * 0.5 - 0.25);
+        },
+        
+        // 计算目标难度 D = S + σ
+        calculateTargetDifficulty: function(skills, cityIndex) {
+            const S = this.calculateSkillPoints(skills);
+            const sigma = this.calculateSigma(cityIndex);
+            return Math.max(1, S + sigma);
+        },
+        
+        // 根据目标难度调整敌人属性
+        scaleEnemy: function(enemy, targetDifficulty) {
+            const scaleFactor = targetDifficulty / enemy.difficulty;
+            return {
+                ...enemy,
+                resistance: Math.floor(enemy.baseResistance * scaleFactor),
+                rewards: {
+                    exp: Math.floor(20 * scaleFactor),
+                    influence: Math.floor(5 * scaleFactor)
+                }
+            };
+        },
+        
+        // 计算旅行事件概率（根据玩家技能动态调整）
+        calculateEventProbability: function(event, skills, resources) {
+            const baseProb = event.baseProbability;
+            const S = this.calculateSkillPoints(skills);
+            
+            // 技能越高，负面事件概率越低
+            const skillFactor = Math.min(0.2, S * 0.02);
+            
+            // 供给充足时，风险事件概率降低
+            const supplyFactor = resources.supplies > 50 ? -0.05 : 
+                                resources.supplies < 20 ? 0.05 : 0;
+            
+            if (event.difficulty <= 2) {
+                return Math.min(0.5, baseProb + skillFactor * 0.5);
+            } else {
+                return Math.max(0.02, baseProb - skillFactor + supplyFactor);
+            }
+        }
+    },
+
+    // 禁食祷告任务
+    fastingPrayer: {
+        duration: 30,  // 基础倒计时30秒
+        tasks: [
+            {
+                type: 'memory_verse',
+                name: '背诵经文',
+                description: '保罗说："我们进入神的国，必须经历许多____。"',
+                answer: '艰难',
+                reward: { faith: 40 }
+            },
+            {
+                type: 'click_prayer',
+                name: '恒切祷告',
+                description: '连续点击祷告按钮15次，表达你的信心',
+                clicks: 15,
+                reward: { faith: 50 }
+            },
+            {
+                type: 'quiet_wait',
+                name: '安静等候',
+                description: '在主面前安静等候20秒',
+                duration: 20,
+                reward: { faith: 45 }
+            }
+        ],
+        baseRecovery: { faith: 50, supplies: 10 }
+    },
+
     // 经文搜索游戏文本
     searchText: {
         acts13: `13:1 在安提阿的教会中，有几位先知和教师，就是巴拿巴和称呼尼结的西面、古利奈人路求，与分封之王希律同养的马念，并扫罗。
@@ -453,11 +676,35 @@ const GameState = {
     quizScore: 0,
     currentQuizIndex: 0,
     totalScore: 0,
-    gameData: {}
+    gameData: {},
+    
+    // 资源管理系统
+    resources: {
+        faith: 100,        // 信念（生命值）
+        supplies: 80,      // 供给（旅行消耗）
+        influence: 20      // 影响力（解锁选项、应对事件）
+    },
+    
+    // 技能系统（动态难度平衡的核心）
+    skills: {
+        debate: { level: 1, exp: 0, maxExp: 100 },      // 辩论
+        miracle: { level: 1, exp: 0, maxExp: 100 },     // 神迹
+        endurance: { level: 1, exp: 0, maxExp: 100 }    // 忍耐
+    },
+    
+    // 当前战斗状态
+    battleState: null,
+    
+    // 禁食祷告状态
+    fastingState: null,
+    
+    // 当前所在城市索引（用于难度计算）
+    currentCityIndex: 0
 };
 
 // 本地存储键名
-const SAVE_KEY = 'paulJourney_saveData_chapter1';
+const SAVE_KEY = 'paulJourney_saveData_chapter1_v2';
+const SAVE_KEY_LEGACY = 'paulJourney_saveData_chapter1';
 
 // 保存游戏
 function saveGame() {
@@ -466,7 +713,11 @@ function saveGame() {
         completedCities: GameState.completedCities,
         collectedVerses: GameState.collectedVerses,
         totalScore: GameState.totalScore,
-        timestamp: new Date().toISOString()
+        resources: GameState.resources,
+        skills: GameState.skills,
+        currentCityIndex: GameState.currentCityIndex,
+        timestamp: new Date().toISOString(),
+        version: '2.0'
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
     return true;
@@ -474,16 +725,40 @@ function saveGame() {
 
 // 加载游戏
 function loadGame() {
-    const saveData = localStorage.getItem(SAVE_KEY);
-    if (saveData) {
-        const data = JSON.parse(saveData);
-        GameState.currentScene = data.currentScene || 'antioch_start';
-        GameState.completedCities = data.completedCities || [];
-        GameState.collectedVerses = data.collectedVerses || [];
-        GameState.totalScore = data.totalScore || 0;
-        return true;
+    // 尝试加载新版本存档
+    let saveData = localStorage.getItem(SAVE_KEY);
+    
+    // 如果没有新版本，尝试加载旧版本并迁移
+    if (!saveData) {
+        saveData = localStorage.getItem(SAVE_KEY_LEGACY);
+        if (saveData) {
+            // 迁移旧存档到新格式
+            const oldData = JSON.parse(saveData);
+            GameState.currentScene = oldData.currentScene || 'antioch_start';
+            GameState.completedCities = oldData.completedCities || [];
+            GameState.collectedVerses = oldData.collectedVerses || [];
+            GameState.totalScore = oldData.totalScore || 0;
+            // 新属性使用默认值
+            GameState.resources = { faith: 100, supplies: 80, influence: 20 };
+            GameState.skills = { debate: { level: 1, exp: 0, maxExp: 100 }, miracle: { level: 1, exp: 0, maxExp: 100 }, endurance: { level: 1, exp: 0, maxExp: 100 } };
+            GameState.currentCityIndex = 0;
+            // 保存为新格式
+            saveGame();
+            return true;
+        }
+        return false;
     }
-    return false;
+    
+    // 加载新版本存档
+    const data = JSON.parse(saveData);
+    GameState.currentScene = data.currentScene || 'antioch_start';
+    GameState.completedCities = data.completedCities || [];
+    GameState.collectedVerses = data.collectedVerses || [];
+    GameState.totalScore = data.totalScore || 0;
+    GameState.resources = data.resources || { faith: 100, supplies: 80, influence: 20 };
+    GameState.skills = data.skills || { debate: { level: 1, exp: 0, maxExp: 100 }, miracle: { level: 1, exp: 0, maxExp: 100 }, endurance: { level: 1, exp: 0, maxExp: 100 } };
+    GameState.currentCityIndex = data.currentCityIndex || 0;
+    return true;
 }
 
 // 检查是否有存档
@@ -494,10 +769,16 @@ function hasSaveData() {
 // 清空存档
 function clearSaveData() {
     localStorage.removeItem(SAVE_KEY);
+    localStorage.removeItem(SAVE_KEY_LEGACY);
     GameState.currentScene = 'antioch_start';
     GameState.completedCities = [];
     GameState.collectedVerses = [];
     GameState.totalScore = 0;
+    GameState.resources = { faith: 100, supplies: 80, influence: 20 };
+    GameState.skills = { debate: { level: 1, exp: 0, maxExp: 100 }, miracle: { level: 1, exp: 0, maxExp: 100 }, endurance: { level: 1, exp: 0, maxExp: 100 } };
+    GameState.battleState = null;
+    GameState.fastingState = null;
+    GameState.currentCityIndex = 0;
 }
 
 // 收藏经文
