@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#d4a574">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="保罗宣教之旅">
+    <meta name="description" content="以互动游戏的方式学习使徒保罗的第一次宣教旅程">
+    <meta name="format-detection" content="telephone=no">
+    
+    <title>使徒保罗的宣教之旅</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Icons -->
+    <link rel="icon" type="image/png" sizes="72x72" href="icons/icon-72x72.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192x192.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="icons/icon-72x72.png">
+    <link rel="apple-touch-icon" sizes="114x114" href="icons/icon-128x128.png">
+    <link rel="apple-touch-icon" sizes="144x144" href="icons/icon-144x144.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192x192.png">
+    
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- PWA Icon Generator -->
+    <script src="icons/icon-generator.js"></script>
+</head>
+<body>
+    <!-- 离线状态指示器 -->
+    <div class="offline-indicator">
+        ⚠️ 当前处于离线模式，游戏仍可正常运行
+    </div>
+    
+    <div id="game-container">
+        <!-- 标题画面 -->
+        <div id="title-screen" class="screen active">
+            <div class="title-content">
+                <h1>使徒保罗的宣教之旅</h1>
+                <p class="subtitle">第一次宣教旅程</p>
+                <p class="verse">"在安提阿的教会中，有几位先知和教师...他们事奉主、禁食的时候，圣灵说：要为我分派巴拿巴和扫罗，去做我召他们所做的工。"</p>
+                <p class="verse-ref">使徒行传 13:1-2</p>
+                <div class="menu-buttons">
+                    <button id="btn-new-game" class="btn-primary">开始新旅程</button>
+                    <button id="btn-continue" class="btn-secondary" style="display:none;">继续旅程</button>
+                    <button id="btn-notes" class="btn-secondary">灵修笔记</button>
+                    <button id="btn-help" class="btn-secondary">游戏说明</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 游戏说明 -->
+        <div id="help-screen" class="screen">
+            <div class="help-content">
+                <h2>游戏说明</h2>
+                <div class="help-section">
+                    <h3>📖 探索模式</h3>
+                    <p>点击地图上的城市，跟随保罗的脚步，体验第一次宣教旅程。</p>
+                </div>
+                <div class="help-section">
+                    <h3>🔍 经文搜索</h3>
+                    <p>在使徒行传13-14章中寻找对应的经文，解开谜题。</p>
+                </div>
+                <div class="help-section">
+                    <h3>🧩 解谜挑战</h3>
+                    <p>收集线索，破解密码，帮助保罗完成宣教使命。</p>
+                </div>
+                <div class="help-section">
+                    <h3>💭 记忆背诵</h3>
+                    <p>学习和背诵关键经文，加深对圣经的理解。</p>
+                </div>
+                <div class="help-section">
+                    <h3>❓ 知识问答</h3>
+                    <p>每章结束时会有测验，检验学习成果。</p>
+                </div>
+                <button id="btn-help-back" class="btn-primary">返回</button>
+            </div>
+        </div>
+
+        <!-- 灵修笔记 -->
+        <div id="notes-screen" class="screen">
+            <div class="notes-content">
+                <h2>我的灵修笔记</h2>
+                <div id="verses-collection" class="verses-list">
+                    <!-- 动态加载收藏的经文 -->
+                </div>
+                <div id="verses-empty" class="empty-message">
+                    <p>还没有收藏经文</p>
+                    <p>在游戏中点击"收藏"按钮保存喜欢的经文</p>
+                </div>
+                <button id="btn-notes-back" class="btn-primary">返回</button>
+            </div>
+        </div>
+
+        <!-- 地图界面 -->
+        <div id="map-screen" class="screen">
+            <div class="map-header">
+                <h2>第一次宣教旅程</h2>
+                <div class="progress-info">
+                    <span id="progress-text">进度: 0/7</span>
+                    <button id="btn-save" class="btn-small">保存</button>
+                </div>
+            </div>
+            <div class="map-container">
+                <svg viewBox="0 0 800 600" class="game-map">
+                    <!-- 地图背景 - 地中海区域 -->
+                    <rect width="800" height="600" fill="#f5e6c8"/>
+                    
+                    <!-- 海洋 -->
+                    <path d="M 0 0 L 800 0 L 800 600 L 0 600 Z" fill="#e8d5b5" opacity="0.3"/>
+                    
+                    <!-- 路线 -->
+                    <path id="route-line" d="M 400 500 L 350 400 L 300 350 L 250 300 L 200 250 L 180 200" 
+                          fill="none" stroke="#8b7355" stroke-width="3" stroke-dasharray="5,5"/>
+                    
+                    <!-- 安提阿（起点） -->
+                    <g class="city-marker" data-city="antioch" transform="translate(400,500)">
+                        <circle r="12" fill="#d4a574" stroke="#8b4513" stroke-width="2"/>
+                        <text y="25" text-anchor="middle" font-size="12" fill="#5c4033">安提阿</text>
+                    </g>
+                    
+                    <!-- 塞浦路斯 -->
+                    <g class="city-marker" data-city="cyprus" transform="translate(350,400)">
+                        <circle r="10" fill="#a0a0a0" stroke="#666" stroke-width="2"/>
+                        <text y="25" text-anchor="middle" font-size="12" fill="#5c4033">塞浦路斯</text>
+                    </g>
+                    
+                    <!-- 彼西底安提阿 -->
+                    <g class="city-marker" data-city="pisidian" transform="translate(300,350)">
+                        <circle r="10" fill="#a0a0a0" stroke="#666" stroke-width="2"/>
+                        <text y="25" text-anchor="middle" font-size="12" fill="#5c4033">彼西底安提阿</text>
+                    </g>
+                    
+                    <!-- 以哥念 -->
+                    <g class="city-marker" data-city="iconium" transform="translate(250,300)">
+                        <circle r="10" fill="#a0a0a0" stroke="#666" stroke-width="2"/>
+                        <text y="25" text-anchor="middle" font-size="12" fill="#5c4033">以哥念</text>
+                    </g>
+                    
+                    <!-- 路司得 -->
+                    <g class="city-marker" data-city="lystra" transform="translate(200,250)">
+                        <circle r="10" fill="#a0a0a0" stroke="#666" stroke-width="2"/>
+                        <text y="25" text-anchor="middle" font-size="12" fill="#5c4033">路司得</text>
+                    </g>
+                    
+                    <!-- 特庇 -->
+                    <g class="city-marker" data-city="derbe" transform="translate(180,200)">
+                        <circle r="10" fill="#a0a0a0" stroke="#666" stroke-width="2"/>
+                        <text y="25" text-anchor="middle" font-size="12" fill="#5c4033">特庇</text>
+                    </g>
+                    
+                    <!-- 返回安提阿 -->
+                    <g class="city-marker" data-city="return" transform="translate(450,480)">
+                        <circle r="10" fill="#a0a0a0" stroke="#666" stroke-width="2"/>
+                        <text y="25" text-anchor="middle" font-size="12" fill="#5c4033">返回</text>
+                    </g>
+                </svg>
+            </div>
+            <div class="map-footer">
+                <button id="btn-menu" class="btn-secondary">主菜单</button>
+                <button id="btn-hint" class="btn-secondary">提示</button>
+            </div>
+        </div>
+
+        <!-- 场景界面 -->
+        <div id="scene-screen" class="screen">
+            <div class="scene-container">
+                <div class="scene-visual">
+                    <div id="scene-bg" class="scene-background"></div>
+                    <div id="scene-characters" class="characters"></div>
+                </div>
+                <div class="scene-dialog">
+                    <div class="dialog-header">
+                        <span id="location-name">地点</span>
+                        <button id="btn-scene-menu" class="btn-small">☰</button>
+                    </div>
+                    <div class="dialog-content">
+                        <p id="dialog-text">场景描述...</p>
+                        <div id="verse-display" class="verse-box" style="display:none;">
+                            <p id="verse-text"></p>
+                            <p id="verse-reference"></p>
+                            <button id="btn-collect-verse" class="btn-small">收藏经文</button>
+                        </div>
+                    </div>
+                    <div id="choices-container" class="choices">
+                        <!-- 动态生成选项 -->
+                    </div>
+                    <div class="dialog-controls">
+                        <button id="btn-next" class="btn-primary">继续</button>
+                        <button id="btn-back-map" class="btn-secondary">返回地图</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 经文搜索小游戏 -->
+        <div id="search-game" class="screen">
+            <div class="mini-game-container">
+                <h3>🔍 经文搜索挑战</h3>
+                <div class="game-instruction">
+                    <p id="search-question">根据描述，在使徒行传中找到对应的经文...</p>
+                </div>
+                <div class="bible-text">
+                    <div class="text-passage">
+                        <p>使徒行传 13章</p>
+                        <div id="search-text-content" class="selectable-text">
+                            <!-- 可选择经文段落 -->
+                        </div>
+                    </div>
+                </div>
+                <div class="search-controls">
+                    <p id="search-feedback" class="feedback"></p>
+                    <button id="btn-search-hint" class="btn-secondary">提示</button>
+                    <button id="btn-search-skip" class="btn-secondary">跳过</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 记忆背诵游戏 -->
+        <div id="memory-game" class="screen">
+            <div class="mini-game-container">
+                <h3>💭 经文记忆挑战</h3>
+                <div class="memory-game-area">
+                    <div id="memory-verse-display" class="memory-verse">
+                        <p id="memory-text"></p>
+                        <p id="memory-ref"></p>
+                    </div>
+                    <div id="memory-test" class="memory-test" style="display:none;">
+                        <p>请回忆上面的经文：</p>
+                        <div id="memory-blanks" class="word-blanks"></div>
+                        <div id="memory-options" class="word-options"></div>
+                    </div>
+                </div>
+                <div class="memory-controls">
+                    <button id="btn-show-verse" class="btn-primary">显示经文</button>
+                    <button id="btn-start-test" class="btn-primary" style="display:none;">开始测试</button>
+                    <button id="btn-check-memory" class="btn-primary" style="display:none;">检查答案</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 解谜游戏 -->
+        <div id="puzzle-game" class="screen">
+            <div class="mini-game-container">
+                <h3>🧩 解谜挑战</h3>
+                <div class="puzzle-area">
+                    <div id="puzzle-story" class="puzzle-story"></div>
+                    <div id="puzzle-clues" class="puzzle-clues"></div>
+                    <div id="puzzle-input-area" class="puzzle-input">
+                        <input type="text" id="puzzle-answer" placeholder="输入答案...">
+                        <button id="btn-check-puzzle" class="btn-primary">提交</button>
+                    </div>
+                </div>
+                <p id="puzzle-feedback" class="feedback"></p>
+            </div>
+        </div>
+
+        <!-- 章节测验 -->
+        <div id="quiz-screen" class="screen">
+            <div class="quiz-container">
+                <h2>第一章测验</h2>
+                <div id="quiz-progress" class="quiz-progress">1/5</div>
+                <div id="quiz-question" class="quiz-question"></div>
+                <div id="quiz-options" class="quiz-options"></div>
+                <div id="quiz-feedback" class="quiz-feedback"></div>
+                <button id="btn-next-question" class="btn-primary" style="display:none;">下一题</button>
+            </div>
+        </div>
+
+        <!-- 完成界面 -->
+        <div id="complete-screen" class="screen">
+            <div class="complete-content">
+                <h2>🎉 恭喜完成第一章！</h2>
+                <div class="completion-stats">
+                    <p>你已完成保罗的第一次宣教旅程</p>
+                    <div id="stats-display" class="stats"></div>
+                </div>
+                <div class="completion-verse">
+                    <p>"我们进入神的国，必须经历许多艰难。"</p>
+                    <p>使徒行传 14:22</p>
+                </div>
+                <div class="completion-buttons">
+                    <button id="btn-replay" class="btn-secondary">重玩本章</button>
+                    <button id="btn-main-menu" class="btn-primary">返回主菜单</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 提示弹窗 -->
+    <div id="hint-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h3>提示</h3>
+            <p id="hint-text"></p>
+        </div>
+    </div>
+
+    <!-- 菜单弹窗 -->
+    <div id="menu-modal" class="modal">
+        <div class="modal-content">
+            <h3>游戏菜单</h3>
+            <button id="modal-save" class="btn-primary">保存进度</button>
+            <button id="modal-notes" class="btn-secondary">查看笔记</button>
+            <button id="modal-help" class="btn-secondary">游戏说明</button>
+            <button id="modal-exit" class="btn-secondary">退出到主菜单</button>
+            <button id="modal-close" class="btn-secondary">返回游戏</button>
+        </div>
+    </div>
+
+    <script src="data.js"></script>
+    <script src="game.js"></script>
+    
+    <!-- PWA Service Worker Registration -->
+    <script>
+        // 注册Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('service-worker.js')
+                    .then(function(registration) {
+                        console.log('[PWA] Service Worker 注册成功:', registration.scope);
+                        
+                        // 检查更新
+                        registration.addEventListener('updatefound', function() {
+                            const newWorker = registration.installing;
+                            newWorker.addEventListener('statechange', function() {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // 有新版本可用
+                                    console.log('[PWA] 发现新版本');
+                                    // 可以在这里提示用户刷新页面
+                                }
+                            });
+                        });
+                    })
+                    .catch(function(error) {
+                        console.log('[PWA] Service Worker 注册失败:', error);
+                    });
+                
+                // 监听离线/在线状态
+                window.addEventListener('online', function() {
+                    console.log('[PWA] 已连接到网络');
+                    document.body.classList.remove('offline');
+                });
+                
+                window.addEventListener('offline', function() {
+                    console.log('[PWA] 已断开网络连接');
+                    document.body.classList.add('offline');
+                });
+                
+                // 检查初始网络状态
+                if (!navigator.onLine) {
+                    document.body.classList.add('offline');
+                }
+            });
+        }
+        
+        // 添加到主屏幕提示（iOS Safari）
+        let deferredPrompt;
+        const addBtn = document.createElement('button');
+        addBtn.style.display = 'none';
+        
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // 阻止Chrome 67及更早版本自动显示提示
+            e.preventDefault();
+            // 存储事件以便稍后触发
+            deferredPrompt = e;
+            // 显示安装按钮或提示
+            console.log('[PWA] 可以添加到主屏幕');
+            
+            // 可以在这里显示自定义的安装提示UI
+            showInstallPrompt();
+        });
+        
+        window.addEventListener('appinstalled', (evt) => {
+            // 应用已安装
+            console.log('[PWA] 应用已安装到主屏幕');
+            deferredPrompt = null;
+            hideInstallPrompt();
+        });
+        
+        // 显示安装提示
+        function showInstallPrompt() {
+            // 创建一个简单的安装提示
+            const installBanner = document.createElement('div');
+            installBanner.id = 'install-banner';
+            installBanner.innerHTML = `
+                <div style="
+                    position: fixed;
+                    bottom: 0;
+                    left: 0;
+                    right: 0;
+                    background: #d4a574;
+                    color: white;
+                    padding: 15px 20px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    z-index: 9999;
+                    box-shadow: 0 -2px 10px rgba(0,0,0,0.2);
+                ">
+                    <span style="font-size: 16px;">📱 添加到主屏幕，离线也能玩！</span>
+                    <div>
+                        <button onclick="installPWA()" style="
+                            background: white;
+                            color: #d4a574;
+                            border: none;
+                            padding: 8px 20px;
+                            border-radius: 20px;
+                            margin-right: 10px;
+                            cursor: pointer;
+                            font-weight: bold;
+                        ">安装</button>
+                        <button onclick="hideInstallPrompt()" style="
+                            background: transparent;
+                            color: white;
+                            border: 1px solid white;
+                            padding: 8px 15px;
+                            border-radius: 20px;
+                            cursor: pointer;
+                        ">关闭</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(installBanner);
+        }
+        
+        // 隐藏安装提示
+        function hideInstallPrompt() {
+            const banner = document.getElementById('install-banner');
+            if (banner) {
+                banner.remove();
+            }
+        }
+        
+        // 安装PWA
+        function installPWA() {
+            hideInstallPrompt();
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('[PWA] 用户接受了安装');
+                    } else {
+                        console.log('[PWA] 用户拒绝了安装');
+                    }
+                    deferredPrompt = null;
+                });
+            }
+        }
+        
+        // iOS Safari添加到主屏幕提示
+        if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) {
+            // 检查是否已经添加到主屏幕
+            if (!window.navigator.standalone) {
+                // 显示iOS安装提示
+                setTimeout(() => {
+                    const iosTip = document.createElement('div');
+                    iosTip.id = 'ios-install-tip';
+                    iosTip.innerHTML = `
+                        <div style="
+                            position: fixed;
+                            bottom: 20px;
+                            left: 50%;
+                            transform: translateX(-50%);
+                            background: rgba(0,0,0,0.8);
+                            color: white;
+                            padding: 15px 25px;
+                            border-radius: 10px;
+                            font-size: 14px;
+                            z-index: 9999;
+                            max-width: 90%;
+                            text-align: center;
+                        ">
+                            📱 点击Safari底部"分享"按钮，然后选择"添加到主屏幕"<br>
+                            <button onclick="this.parentElement.parentElement.remove()" style="
+                                margin-top: 10px;
+                                background: #d4a574;
+                                color: white;
+                                border: none;
+                                padding: 5px 15px;
+                                border-radius: 15px;
+                                cursor: pointer;
+                            ">知道了</button>
+                        </div>
+                    `;
+                    document.body.appendChild(iosTip);
+                }, 3000);
+            }
+        }
+    </script>
+</body>
+</html>

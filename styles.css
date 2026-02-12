@@ -1,0 +1,975 @@
+/* 基础样式重置 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Microsoft YaHei', 'SimHei', sans-serif;
+    background: linear-gradient(135deg, #f5e6c8 0%, #e8d5b5 100%);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* 游戏容器 */
+#game-container {
+    width: 100%;
+    max-width: 900px;
+    height: 100vh;
+    max-height: 800px;
+    background: #fffef5;
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    overflow: hidden;
+    position: relative;
+}
+
+/* 屏幕切换 */
+.screen {
+    display: none;
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    overflow-y: auto;
+}
+
+.screen.active {
+    display: flex;
+    flex-direction: column;
+}
+
+/* 标题画面 */
+#title-screen {
+    background: linear-gradient(180deg, #f5e6c8 0%, #e8d5b5 100%);
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 40px;
+}
+
+.title-content h1 {
+    font-size: 2.5em;
+    color: #5c4033;
+    margin-bottom: 10px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+}
+
+.subtitle {
+    font-size: 1.5em;
+    color: #8b7355;
+    margin-bottom: 30px;
+}
+
+.verse {
+    font-size: 1.1em;
+    color: #6b5b4f;
+    font-style: italic;
+    max-width: 600px;
+    line-height: 1.8;
+    margin-bottom: 10px;
+}
+
+.verse-ref {
+    font-size: 0.9em;
+    color: #8b7355;
+    margin-bottom: 40px;
+}
+
+/* 按钮样式 */
+.menu-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    align-items: center;
+}
+
+button {
+    padding: 12px 30px;
+    font-size: 1.1em;
+    border: none;
+    border-radius: 25px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: inherit;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #d4a574 0%, #c8956d 100%);
+    color: white;
+    min-width: 200px;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #c8956d 0%, #b8855c 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+
+.btn-secondary {
+    background: transparent;
+    color: #5c4033;
+    border: 2px solid #d4a574;
+    min-width: 200px;
+}
+
+.btn-secondary:hover {
+    background: #d4a574;
+    color: white;
+}
+
+.btn-small {
+    padding: 8px 16px;
+    font-size: 0.9em;
+    min-width: auto;
+}
+
+/* 帮助界面 */
+#help-screen {
+    padding: 40px;
+    background: #fffef5;
+}
+
+.help-content {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.help-content h2 {
+    color: #5c4033;
+    text-align: center;
+    margin-bottom: 30px;
+    font-size: 2em;
+}
+
+.help-section {
+    background: #f9f5eb;
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    border-left: 4px solid #d4a574;
+}
+
+.help-section h3 {
+    color: #5c4033;
+    margin-bottom: 10px;
+}
+
+.help-section p {
+    color: #6b5b4f;
+    line-height: 1.6;
+}
+
+/* 笔记界面 */
+#notes-screen {
+    padding: 40px;
+    background: #fffef5;
+}
+
+.notes-content {
+    max-width: 700px;
+    margin: 0 auto;
+}
+
+.notes-content h2 {
+    color: #5c4033;
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.verses-list {
+    background: #f9f5eb;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.verse-item {
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    border-left: 3px solid #d4a574;
+}
+
+.verse-item p:first-child {
+    color: #5c4033;
+    font-style: italic;
+    line-height: 1.6;
+    margin-bottom: 5px;
+}
+
+.verse-item p:last-child {
+    color: #8b7355;
+    font-size: 0.9em;
+}
+
+.empty-message {
+    text-align: center;
+    color: #8b7355;
+    padding: 40px;
+}
+
+/* 地图界面 */
+#map-screen {
+    background: #f5e6c8;
+}
+
+.map-header {
+    background: #fffef5;
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid #d4a574;
+}
+
+.map-header h2 {
+    color: #5c4033;
+    font-size: 1.3em;
+}
+
+.progress-info {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+#progress-text {
+    color: #8b7355;
+}
+
+.map-container {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.game-map {
+    width: 100%;
+    max-width: 700px;
+    height: auto;
+    border-radius: 15px;
+    background: #fffef5;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+}
+
+.city-marker {
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.city-marker:hover circle {
+    fill: #d4a574;
+    r: 14;
+}
+
+.city-marker.visited circle {
+    fill: #4a7c59;
+}
+
+.city-marker.current circle {
+    fill: #d4a574;
+    stroke: #5c4033;
+    stroke-width: 3;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { r: 12; }
+    50% { r: 14; }
+}
+
+.map-footer {
+    background: #fffef5;
+    padding: 15px;
+    display: flex;
+    justify-content: space-around;
+    border-top: 2px solid #d4a574;
+}
+
+/* 场景界面 */
+#scene-screen {
+    background: #f5e6c8;
+}
+
+.scene-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.scene-visual {
+    flex: 1;
+    position: relative;
+    background: linear-gradient(180deg, #87ceeb 0%, #f5e6c8 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.scene-background {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    background-size: cover;
+    background-position: center;
+}
+
+.characters {
+    position: relative;
+    z-index: 1;
+}
+
+.scene-dialog {
+    background: #fffef5;
+    padding: 20px;
+    border-top: 3px solid #d4a574;
+    min-height: 250px;
+}
+
+.dialog-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+#location-name {
+    font-size: 1.2em;
+    color: #5c4033;
+    font-weight: bold;
+}
+
+.dialog-content {
+    margin-bottom: 20px;
+}
+
+#dialog-text {
+    color: #5c4033;
+    line-height: 1.8;
+    font-size: 1.1em;
+}
+
+.verse-box {
+    background: #f9f5eb;
+    padding: 15px;
+    border-radius: 8px;
+    margin-top: 15px;
+    border-left: 3px solid #d4a574;
+}
+
+#verse-text {
+    color: #5c4033;
+    font-style: italic;
+    line-height: 1.6;
+    margin-bottom: 5px;
+}
+
+#verse-reference {
+    color: #8b7355;
+    font-size: 0.9em;
+}
+
+.choices {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.choice-btn {
+    background: #f9f5eb;
+    border: 2px solid #d4a574;
+    color: #5c4033;
+    padding: 12px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: left;
+}
+
+.choice-btn:hover {
+    background: #d4a574;
+    color: white;
+}
+
+.dialog-controls {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
+
+/* 小游戏通用样式 */
+.mini-game-container {
+    padding: 30px;
+    max-width: 700px;
+    margin: 0 auto;
+    background: #fffef5;
+    border-radius: 15px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+}
+
+.mini-game-container h3 {
+    color: #5c4033;
+    text-align: center;
+    margin-bottom: 20px;
+    font-size: 1.5em;
+}
+
+.game-instruction {
+    background: #f9f5eb;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.feedback {
+    text-align: center;
+    padding: 15px;
+    border-radius: 8px;
+    margin-top: 15px;
+    font-weight: bold;
+}
+
+.feedback.success {
+    background: #d4edda;
+    color: #155724;
+}
+
+.feedback.error {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.feedback.hint {
+    background: #fff3cd;
+    color: #856404;
+}
+
+/* 经文搜索游戏 */
+.bible-text {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    border: 2px solid #d4a574;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.selectable-text {
+    line-height: 2;
+    color: #5c4033;
+}
+
+.verse-selectable {
+    cursor: pointer;
+    padding: 2px 5px;
+    border-radius: 3px;
+    transition: background 0.2s;
+}
+
+.verse-selectable:hover {
+    background: #e8d5b5;
+}
+
+.verse-selectable.selected {
+    background: #d4a574;
+    color: white;
+}
+
+.search-controls {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+/* 记忆游戏 */
+.memory-verse {
+    background: #f9f5eb;
+    padding: 30px;
+    border-radius: 10px;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+#memory-text {
+    font-size: 1.2em;
+    color: #5c4033;
+    font-style: italic;
+    line-height: 1.8;
+    margin-bottom: 10px;
+}
+
+#memory-ref {
+    color: #8b7355;
+}
+
+.memory-test {
+    background: white;
+    padding: 30px;
+    border-radius: 10px;
+    border: 2px solid #d4a574;
+}
+
+.word-blanks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    margin: 20px 0;
+}
+
+.word-blank {
+    min-width: 80px;
+    height: 35px;
+    border: 2px dashed #d4a574;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f9f5eb;
+    cursor: pointer;
+}
+
+.word-blank.filled {
+    border-style: solid;
+    background: #d4a574;
+    color: white;
+}
+
+.word-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+}
+
+.word-option {
+    padding: 8px 15px;
+    background: #e8d5b5;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.word-option:hover {
+    background: #d4a574;
+    color: white;
+}
+
+.word-option.used {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.memory-controls {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+/* 解谜游戏 */
+.puzzle-story {
+    background: #f9f5eb;
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    line-height: 1.8;
+    color: #5c4033;
+}
+
+.puzzle-clues {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    border: 2px solid #d4a574;
+    margin-bottom: 20px;
+}
+
+.clue-item {
+    padding: 10px;
+    margin-bottom: 10px;
+    background: #f9f5eb;
+    border-radius: 5px;
+    border-left: 3px solid #d4a574;
+}
+
+.puzzle-input {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+#puzzle-answer {
+    padding: 12px 20px;
+    border: 2px solid #d4a574;
+    border-radius: 25px;
+    font-size: 1em;
+    min-width: 250px;
+}
+
+/* 测验界面 */
+#quiz-screen {
+    background: #f5e6c8;
+    padding: 40px;
+}
+
+.quiz-container {
+    max-width: 700px;
+    margin: 0 auto;
+    background: #fffef5;
+    padding: 40px;
+    border-radius: 15px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+}
+
+.quiz-container h2 {
+    color: #5c4033;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+.quiz-progress {
+    text-align: center;
+    color: #8b7355;
+    margin-bottom: 30px;
+    font-size: 1.1em;
+}
+
+.quiz-question {
+    font-size: 1.2em;
+    color: #5c4033;
+    margin-bottom: 25px;
+    line-height: 1.6;
+}
+
+.quiz-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.quiz-option {
+    background: #f9f5eb;
+    border: 2px solid #d4a574;
+    padding: 15px 20px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-align: left;
+}
+
+.quiz-option:hover {
+    background: #e8d5b5;
+}
+
+.quiz-option.correct {
+    background: #d4edda;
+    border-color: #28a745;
+}
+
+.quiz-option.wrong {
+    background: #f8d7da;
+    border-color: #dc3545;
+}
+
+.quiz-option.disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.quiz-feedback {
+    text-align: center;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+/* 完成界面 */
+#complete-screen {
+    background: linear-gradient(135deg, #f5e6c8 0%, #e8d5b5 100%);
+    justify-content: center;
+    align-items: center;
+    padding: 40px;
+}
+
+.complete-content {
+    text-align: center;
+    max-width: 600px;
+}
+
+.complete-content h2 {
+    font-size: 2em;
+    color: #5c4033;
+    margin-bottom: 30px;
+}
+
+.completion-stats {
+    background: #fffef5;
+    padding: 30px;
+    border-radius: 15px;
+    margin-bottom: 30px;
+}
+
+.completion-stats p {
+    color: #5c4033;
+    font-size: 1.1em;
+    margin-bottom: 15px;
+}
+
+.stats {
+    display: flex;
+    justify-content: space-around;
+    margin-top: 20px;
+}
+
+.stat-item {
+    text-align: center;
+}
+
+.stat-value {
+    font-size: 2em;
+    color: #d4a574;
+    font-weight: bold;
+}
+
+.stat-label {
+    color: #8b7355;
+    font-size: 0.9em;
+}
+
+.completion-verse {
+    background: #f9f5eb;
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 30px;
+    font-style: italic;
+    color: #5c4033;
+}
+
+.completion-buttons {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+}
+
+/* 弹窗样式 */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+}
+
+.modal.active {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background: #fffef5;
+    padding: 30px;
+    border-radius: 15px;
+    max-width: 500px;
+    width: 90%;
+    text-align: center;
+}
+
+.modal-content h3 {
+    color: #5c4033;
+    margin-bottom: 20px;
+}
+
+.modal-content button {
+    display: block;
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+.close {
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    color: #8b7355;
+    cursor: pointer;
+    line-height: 20px;
+}
+
+.close:hover {
+    color: #5c4033;
+}
+
+/* 响应式设计 */
+@media (max-width: 600px) {
+    #game-container {
+        border-radius: 0;
+        max-height: 100vh;
+    }
+    
+    .title-content h1 {
+        font-size: 1.8em;
+    }
+    
+    .verse {
+        font-size: 0.95em;
+    }
+    
+    button {
+        padding: 10px 20px;
+        font-size: 1em;
+    }
+    
+    .scene-dialog {
+        min-height: 200px;
+    }
+    
+    #dialog-text {
+        font-size: 1em;
+    }
+    
+    .mini-game-container {
+        padding: 20px;
+    }
+    
+    .quiz-container {
+        padding: 20px;
+    }
+}
+
+/* 动画效果 */
+.fade-in {
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.slide-up {
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from { 
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to { 
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* PWA离线状态指示器 */
+.offline-indicator {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: #ff9800;
+    color: white;
+    text-align: center;
+    padding: 8px;
+    font-size: 14px;
+    z-index: 9998;
+    display: none;
+}
+
+body.offline .offline-indicator {
+    display: block;
+}
+
+/* 安装提示横幅样式 */
+#install-banner {
+    animation: slideUp 0.3s ease-out;
+}
+
+#ios-install-tip {
+    animation: fadeIn 0.5s ease-in;
+}
+
+/* PWA独立运行模式优化 */
+@media (display-mode: standalone) {
+    /* 在独立模式下隐藏地址栏空间 */
+    body {
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+    
+    /* 调整游戏容器 */
+    #game-container {
+        border-radius: 0;
+        max-height: 100vh;
+    }
+}
+
+/* 针对iPhone X及以上机型的刘海屏适配 */
+@supports (padding-top: env(safe-area-inset-top)) {
+    #game-container {
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+}
+
+/* 触摸优化 */
+@media (pointer: coarse) {
+    button, .choice-btn, .quiz-option {
+        min-height: 44px;
+        padding: 12px 20px;
+    }
+    
+    .city-marker {
+        cursor: pointer;
+    }
+    
+    .city-marker circle {
+        r: 15;
+    }
+}
+
+/* 防止iOS上的橡皮筋效果 */
+html, body {
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* 隐藏滚动条但保持滚动功能 */
+.screen::-webkit-scrollbar {
+    width: 0;
+    background: transparent;
+}
+
+/* 离线模式下的特殊样式 */
+body.offline #game-container {
+    position: relative;
+}
+
+body.offline #game-container::before {
+    content: '📱 离线模式';
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(255, 152, 0, 0.9);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 15px;
+    font-size: 12px;
+    z-index: 100;
+}
