@@ -68,6 +68,165 @@ function updateResourceDisplay() {
     }
 }
 
+// ==================== 经文装备系统 ====================
+
+// 应用经文效果
+function applyVerseEffects(effects) {
+    if (effects.faith) addResources({ faith: effects.faith });
+    if (effects.supplies) addResources({ supplies: effects.supplies });
+    if (effects.influence) addResources({ influence: effects.influence });
+    
+    // 特殊效果
+    if (effects.enemy_resistance && GameState.battleState) {
+        GameState.battleState.enemyCurrentResistance += effects.enemy_resistance;
+    }
+    
+    if (effects.gospel_saturation) {
+        // 增加当前城市的福音饱和度
+        const currentCity = GameData.scenes[currentScene].city;
+        if (currentCity) {
+            const city = GameData.cities[currentCity];
+            if (city) {
+                city.gospel_saturation = (city.gospel_saturation || 0) + effects.gospel_saturation;
+            }
+        }
+    }
+}
+
+// 检查经文是否可用
+function canUseVerse(verseKey) {
+    const verse = GameData.verses[verseKey];
+    if (!verse) return false;
+    
+    // 检查是否已收藏
+    if (!GameState.collectedVerses.includes(verseKey)) return false;
+    
+    // 检查使用次数
+    if (!verse.consume) return true;
+    
+    const used = GameState.verseUsage?.[verseKey] || 0;
+    return used < (verse.maxUses || 1);
+}
+
+// 使用经文
+function useVerse(verseKey) {
+    if (!canUseVerse(verseKey)) return false;
+    
+    const verse = GameData.verses[verseKey];
+    
+    // 记录使用次数
+    if (verse.consume) {
+        GameState.verseUsage = GameState.verseUsage || {};
+        GameState.verseUsage[verseKey] = (GameState.verseUsage[verseKey] || 0) + 1;
+    }
+    
+    // 应用效果
+    if (verse.effect) {
+        applyVerseEffects(verse.effect);
+    }
+    
+    saveGame();
+    return verse;
+}
+
+// 获取可用的经文列表（用于当前场景）
+function getAvailableVersesForScene(sceneKey) {
+    const scene = GameData.scenes[sceneKey];
+    if (!scene) return [];
+    
+    // 获取所有已收集的经文
+    const collectedVerses = GameState.collectedVerses || [];
+    
+    // 过滤出当前场景可用的经文
+    return collectedVerses.filter(verseKey => {
+        const verse = GameData.verses[verseKey];
+        if (!verse) return false;
+        
+        // 检查使用次数
+        if (!canUseVerse(verseKey)) return false;
+        
+        // 检查是否适用于当前场景类型
+        if (scene.type === 'spiritual_battle' && scene.gameData?.battleEnemy) {
+            // 在属灵争战中，检查经文是否适用于此敌人
+            const enemy = GameData.spiritualBattles[scene.gameData.battleEnemy];
+            if (enemy) {
+                // 如果经文有特定的适用场景，检查是否匹配
+                if (verse.usedIn && verse.usedIn.length > 0) {
+                    return verse.usedIn.some(tag => 
+                        tag.includes(scene.gameData.battleEnemy) ||
+                        tag.includes(scene.city)
+                    );
+                }
+            }
+        }
+        
+        return true;
+    });
+}
+
+// 渲染经文选择界面
+function renderVerseSelector(availableVerses, onSelect, context = 'battle') {
+    const container = document.createElement('div');
+    container.className = 'verse-selector';
+    container.innerHTML = `
+        <div class="verse-selector-header">
+            <h3>📖 选择经文作为论据</h3>
+            <p class="verse-selector-hint">选择最合适的经文来回应当前的挑战</p>
+        </div>
+        <div class="verse-list">
+            ${availableVerses.length === 0 ? 
+                '<div class="verse-empty">你还没有收藏适合此场景的经文。继续前进，收集更多经文！</div>' :
+                availableVerses.map(verseKey => {
+                    const verse = GameData.verses[verseKey];
+                    const typeInfo = GameData.verseTypes[verse.type];
+                    const usesLeft = verse.consume ? 
+                        `${(verse.maxUses || 1) - (GameState.verseUsage?.[verseKey] || 0)}/${verse.maxUses || 1}` : 
+                        '∞';
+                    
+                    return `
+                        <div class="verse-card ${!canUseVerse(verseKey) ? 'disabled' : ''}" data-verse="${verseKey}">
+                            <div class="verse-card-header">
+                                <span class="verse-icon">${typeInfo?.icon || '📖'}</span>
+                                <span class="verse-type">${typeInfo?.name || verse.type}</span>
+                                <span class="verse-uses">使用次数: ${usesLeft}</span>
+                            </div>
+                            <div class="verse-text">"${verse.text.substring(0, 50)}..."</div>
+                            <div class="verse-reference">${verse.reference}</div>
+                            <div class="verse-description">${verse.description}</div>
+                            <div class="verse-effects">
+                                ${verse.effect?.faith ? `<span class="effect-tag faith">+${verse.effect.faith}信念</span>` : ''}
+                                ${verse.effect?.influence ? `<span class="effect-tag influence">+${verse.effect.influence}影响力</span>` : ''}
+                                ${verse.effect?.enemy_resistance ? `<span class="effect-tag damage">${verse.effect.enemy_resistance}抵抗力</span>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('')
+            }
+        </div>
+        <div class="verse-selector-footer">
+            <button id="btn-cancel-verse" class="btn-secondary">不使用经文</button>
+        </div>
+    `;
+    
+    // 绑定选择事件
+    container.querySelectorAll('.verse-card:not(.disabled)').forEach(card => {
+        card.addEventListener('click', () => {
+            const verseKey = card.dataset.verse;
+            onSelect(verseKey);
+        });
+    });
+    
+    // 绑定取消按钮
+    const cancelBtn = container.querySelector('#btn-cancel-verse');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => {
+            onSelect(null);
+        });
+    }
+    
+    return container;
+}
+
 // ==================== 技能系统 ====================
 
 // 获取技能当前属性（根据等级计算）
@@ -187,10 +346,10 @@ function showTravelEventModal(event, canHandle, nextScene) {
     });
 }
 
-// ==================== 属灵争战系统 ====================
+// ==================== 经文对决系统 ====================
 
-// 初始化战斗
-function initSpiritualBattle(enemyId) {
+// 初始化经文对决（替代原有的属灵争战）
+function initScriptureDebate(enemyId) {
     const enemyTemplate = GameData.spiritualBattles[enemyId];
     const targetDifficulty = GameData.difficultySystem.calculateTargetDifficulty(
         GameState.skills,
@@ -203,123 +362,190 @@ function initSpiritualBattle(enemyId) {
     GameState.battleState = {
         enemy: enemy,
         enemyCurrentResistance: enemy.resistance,
-        playerCurrentFaith: GameState.resources.faith,
         turn: 1,
-        log: []
+        log: [],
+        usedVerses: [],  // 本对决中使用过的经文
+        awaitingVerse: true  // 等待玩家选择经文
     };
     
-    renderBattleScreen();
+    renderScriptureDebateScreen();
 }
 
-// 渲染战斗界面
-function renderBattleScreen() {
+// 渲染经文对决界面
+function renderScriptureDebateScreen() {
     const battle = GameState.battleState;
     const container = document.getElementById('puzzle-game');
     
+    // 获取当前可用的经文
+    const availableVerses = getAvailableVersesForScene(currentScene);
+    
     container.innerHTML = `
-        <div class="battle-container" style="padding: 20px;">
-            <h2 style="color: #8b4513; margin-bottom: 20px;">属灵争战</h2>
-            <div class="enemy-info" style="background: #f5f5dc; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+        <div class="debate-container" style="padding: 20px;">
+            <h2 style="color: #8b4513; margin-bottom: 20px;">📖 经文对决</h2>
+            <div class="debate-context" style="background: #f5f5dc; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
                 <h3 style="margin: 0 0 10px 0;">${battle.enemy.name}</h3>
-                <p style="margin: 5px 0; font-size: 14px;">${battle.enemy.description}</p>
+                <p style="margin: 5px 0; font-size: 14px; color: #666;">${battle.enemy.description}</p>
                 <div class="resistance-bar" style="margin-top: 10px;">
                     <div style="background: #ddd; height: 20px; border-radius: 10px; overflow: hidden;">
-                        <div style="background: #c41e3a; height: 100%; width: ${(battle.enemyCurrentResistance / battle.enemy.resistance) * 100}%; transition: width 0.3s;"></div>
+                        <div style="background: #c41e3a; height: 100%; width: ${Math.max(0, (battle.enemyCurrentResistance / battle.enemy.resistance) * 100)}%; transition: width 0.3s;"></div>
                     </div>
-                    <p style="text-align: center; margin: 5px 0; font-size: 12px;">阻力值：${battle.enemyCurrentResistance}/${battle.enemy.resistance}</p>
+                    <p style="text-align: center; margin: 5px 0; font-size: 12px;">说服力：${Math.max(0, battle.enemyCurrentResistance)}/${battle.enemy.resistance}</p>
                 </div>
             </div>
             
-            <div class="player-status" style="display: flex; justify-content: space-around; margin-bottom: 20px; font-size: 14px;">
-                <span>信念：${GameState.resources.faith}/100</span>
-                <span>供给：${GameState.resources.supplies}</span>
-                <span>影响力：${GameState.resources.influence}</span>
+            <div class="player-status" style="display: flex; justify-content: space-around; margin-bottom: 20px; font-size: 14px; background: #fff; padding: 10px; border-radius: 8px;">
+                <span>✝ ${GameState.resources.faith}/100</span>
+                <span>🍞 ${GameState.resources.supplies}</span>
+                <span>👥 ${GameState.resources.influence}</span>
             </div>
             
-            <div class="skills-container" style="display: flex; gap: 10px; justify-content: center; margin-bottom: 20px;">
-                ${renderSkillButton('debate')}
-                ${renderSkillButton('miracle')}
-                ${renderSkillButton('endurance')}
+            <div class="verse-selection-area" style="margin-bottom: 20px;">
+                <h3 style="margin-bottom: 15px; color: #5c4033;">选择经文作为论据：</h3>
+                <div class="verse-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; max-height: 300px; overflow-y: auto;">
+                    ${availableVerses.length === 0 ? 
+                        `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #999;">
+                            <p>📚 你还没有收集到适合此场景的经文</p>
+                            <p style="font-size: 12px; margin-top: 10px;">继续旅程，在游戏中收集更多经文</p>
+                            <button id="btn-no-verse" class="btn-secondary" style="margin-top: 15px;">凭信心回应</button>
+                        </div>` :
+                        availableVerses.map(verseKey => {
+                            const verse = GameData.verses[verseKey];
+                            const typeInfo = GameData.verseTypes[verse.type];
+                            const usesLeft = verse.consume ? 
+                                (verse.maxUses || 1) - (GameState.verseUsage?.[verseKey] || 0) : 
+                                '∞';
+                            const isExhausted = verse.consume && usesLeft <= 0;
+                            
+                            return `
+                                <div class="verse-card ${isExhausted ? 'disabled' : ''}" 
+                                     data-verse="${verseKey}" 
+                                     style="background: ${isExhausted ? '#f0f0f0' : '#fff'}; 
+                                            border: 2px solid ${isExhausted ? '#ddd' : '#d4a574'}; 
+                                            border-radius: 8px; 
+                                            padding: 12px; 
+                                            cursor: ${isExhausted ? 'not-allowed' : 'pointer'};
+                                            opacity: ${isExhausted ? 0.6 : 1};
+                                            transition: all 0.2s;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                        <span style="font-size: 18px;">${typeInfo?.icon || '📖'}</span>
+                                        <span style="font-size: 11px; color: #666; background: #f5f5dc; padding: 2px 6px; border-radius: 4px;">${typeInfo?.name}</span>
+                                    </div>
+                                    <div style="font-size: 13px; color: #5c4033; margin-bottom: 6px; line-height: 1.4; height: 36px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">
+                                        "${verse.text.substring(0, 40)}..."
+                                    </div>
+                                    <div style="font-size: 11px; color: #8b7355; margin-bottom: 8px;">${verse.reference}</div>
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div style="display: flex; gap: 5px;">
+                                            ${verse.effect?.faith ? `<span style="font-size: 10px; background: #e8f5e9; color: #2e7d32; padding: 2px 5px; border-radius: 3px;">+${verse.effect.faith}信念</span>` : ''}
+                                            ${verse.effect?.influence ? `<span style="font-size: 10px; background: #e3f2fd; color: #1565c0; padding: 2px 5px; border-radius: 3px;">+${verse.effect.influence}影响力</span>` : ''}
+                                            ${verse.effect?.enemy_resistance ? `<span style="font-size: 10px; background: #ffebee; color: #c62828; padding: 2px 5px; border-radius: 3px;">${verse.effect.enemy_resistance}说服</span>` : ''}
+                                        </div>
+                                        <span style="font-size: 10px; color: #999;">剩余: ${usesLeft}</span>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')
+                    }
+                </div>
             </div>
             
-            <div class="battle-log" style="background: #fff; padding: 10px; border-radius: 8px; max-height: 150px; overflow-y: auto; font-size: 14px; line-height: 1.5;">
-                ${battle.log.map(entry => `<p style="margin: 3px 0;">${entry}</p>`).join('')}
+            <div class="debate-log" style="background: #fff; padding: 10px; border-radius: 8px; max-height: 120px; overflow-y: auto; font-size: 13px; line-height: 1.5; border: 1px solid #e0e0e0;">
+                ${battle.log.length === 0 ? 
+                    '<p style="color: #999; text-align: center; margin: 0;">对决即将开始...选择合适的经文来回应挑战</p>' :
+                    battle.log.map(entry => `<p style="margin: 4px 0;">${entry}</p>`).join('')
+                }
             </div>
         </div>
     `;
     
+    // 绑定经文选择事件
+    container.querySelectorAll('.verse-card:not(.disabled)').forEach(card => {
+        card.addEventListener('click', () => {
+            const verseKey = card.dataset.verse;
+            executeScriptureDebateTurn(verseKey);
+        });
+    });
+    
+    // 绑定"凭信心回应"按钮（无经文时）
+    const noVerseBtn = container.querySelector('#btn-no-verse');
+    if (noVerseBtn) {
+        noVerseBtn.addEventListener('click', () => {
+            executeScriptureDebateTurn(null);
+        });
+    }
+    
     showScreen('puzzle-game');
 }
 
-// 渲染技能按钮
-function renderSkillButton(skillName) {
-    const stats = getSkillStats(skillName);
-    const canUse = hasEnoughResources(stats.cost);
-    
-    return `
-        <button class="skill-btn ${!canUse ? 'disabled' : ''}" data-skill="${skillName}" 
-                style="padding: 10px 15px; font-size: 14px; ${!canUse ? 'opacity: 0.5;' : ''}"
-                ${!canUse ? 'disabled' : ''}>
-            <strong>${stats.name}</strong> (Lv.${stats.level})
-            <br><small>${stats.description}</small>
-            <br><small style="color: #666;">
-                ${stats.cost.faith ? `信念-${stats.cost.faith} ` : ''}
-                ${stats.cost.supplies ? `供给-${stats.cost.supplies} ` : ''}
-                ${stats.cost.influence ? `影响力-${stats.cost.influence} ` : ''}
-                | 伤害${stats.damage} | 成功率${Math.floor(stats.chance * 100)}%
-            </small>
-        </button>
-    `;
-}
-
-// 执行战斗回合
-function executeBattleTurn(skillName) {
+// 执行经文对决回合
+function executeScriptureDebateTurn(verseKey) {
     const battle = GameState.battleState;
-    const stats = getSkillStats(skillName);
+    const enemy = battle.enemy;
     
-    // 消耗资源
-    const result = consumeResources(stats.cost);
-    if (result === 'fasting') return;  // Faith归零，进入禁食祷告
-    if (!result) {
-        showHint('资源不足！');
-        return;
-    }
-    
-    // 判定是否命中
-    const hit = Math.random() < stats.chance;
-    
-    if (hit) {
-        // 计算伤害（弱点有加成）
-        let damage = stats.damage;
-        if (battle.enemy.weakness && battle.enemy.weakness.includes(skillName)) {
+    if (verseKey) {
+        // 使用经文
+        const verse = useVerse(verseKey);
+        if (!verse) {
+            showHint('经文使用失败！');
+            return;
+        }
+        
+        // 记录使用
+        battle.usedVerses.push(verseKey);
+        
+        // 计算说服力伤害
+        let damage = verse.strength || 20;
+        
+        // 检查是否击中敌人弱点（经文类型匹配）
+        let isWeaknessHit = false;
+        if (enemy.weakness && enemy.weakness.includes(verse.type)) {
             damage = Math.floor(damage * 1.5);
-            battle.log.push(`✨ ${stats.name}击中弱点！造成 ${damage} 点伤害！`);
+            isWeaknessHit = true;
+        }
+        
+        // 构建效果描述
+        let effectDesc = [];
+        if (verse.effect?.faith) effectDesc.push(`恢复${verse.effect.faith}信念`);
+        if (verse.effect?.influence) effectDesc.push(`增加${verse.effect.influence}影响力`);
+        
+        // 添加战斗日志
+        if (isWeaknessHit) {
+            battle.log.push(`✨ <strong>完美引用！</strong> "${verse.reference}" 直接击中对方的盲点！造成 ${damage} 点说服伤害${effectDesc.length ? '，' + effectDesc.join('、') : ''}。`);
         } else {
-            battle.log.push(`✓ ${stats.name}成功！造成 ${damage} 点伤害。`);
+            battle.log.push(`✓ 你引用 "${verse.reference}" 来回应。造成 ${damage} 点说服伤害${effectDesc.length ? '，' + effectDesc.join('、') : ''}。`);
         }
         
         battle.enemyCurrentResistance -= damage;
         
-        // 如果有治疗效果
-        if (stats.heal) {
-            addResources(stats.heal);
-            battle.log.push(`❤️ 恢复了 ${stats.heal.faith} 点信念！`);
-        }
-        
-        // 增加技能经验
-        addSkillExp(skillName, 10);
     } else {
-        battle.log.push(`✗ ${stats.name}未命中...`);
+        // 没有使用经文，凭自己回应
+        const damage = 5;  // 基础伤害很低
+        const faithCost = 10;  // 消耗信念
+        
+        GameState.resources.faith -= faithCost;
+        battle.log.push(`⚠️ 你尝试凭自己的智慧回应，但说服力不足（-${faithCost}信念，仅造成${damage}点伤害）。`);
+        battle.enemyCurrentResistance -= damage;
+        
+        updateResourceDisplay();
     }
     
-    // 检查战斗结束
+    // 检查是否说服成功
     if (battle.enemyCurrentResistance <= 0) {
-        // 胜利
-        const rewards = battle.enemy.rewards;
-        battle.log.push(`🎉 战斗胜利！获得 ${rewards.exp} 经验值和 ${rewards.influence} 影响力！`);
-        addResources({ influence: rewards.influence });
+        battle.log.push(`🎉 <strong>说服成功！</strong> 对方被你的论证折服。`);
         
-        // 延迟后返回场景
+        // 获得奖励
+        const rewards = enemy.rewards;
+        if (rewards) {
+            battle.log.push(`💎 获得 ${rewards.exp || 20} 经验值和 ${rewards.influence || 10} 影响力！`);
+            addResources({ influence: rewards.influence || 10 });
+            
+            // 增加技能经验
+            addSkillExp('debate', rewards.exp || 20);
+        }
+        
+        saveGame();
+        
+        // 延迟后进入下一个场景
         setTimeout(() => {
             GameState.battleState = null;
             const scene = GameData.scenes[currentScene];
@@ -328,26 +554,35 @@ function executeBattleTurn(skillName) {
             } else {
                 showScreen('map-screen');
             }
-        }, 2000);
+        }, 2500);
         return;
     }
     
     // 敌人反击
-    const enemyDamage = Math.floor(5 + Math.random() * 10);
-    GameState.resources.faith -= enemyDamage;
-    battle.log.push(`💔 ${battle.enemy.name}反击！失去 ${enemyDamage} 点信念。`);
-    
-    // 检查Faith归零
-    if (GameState.resources.faith <= 0) {
-        GameState.resources.faith = 0;
+    setTimeout(() => {
+        const enemyAttack = Math.floor(8 + Math.random() * 12);
+        GameState.resources.faith -= enemyAttack;
+        battle.log.push(`💔 ${enemy.name}提出质疑！你的信念受到冲击（-${enemyAttack}信念）。`);
+        
+        // 检查信念归零
+        if (GameState.resources.faith <= 0) {
+            GameState.resources.faith = 0;
+            saveGame();
+            battle.log.push(`⚠️ 你的信念动摇了...需要禁食祷告重新得力。`);
+            
+            setTimeout(() => {
+                triggerFastingPrayer();
+            }, 1500);
+            return;
+        }
+        
+        battle.turn++;
         saveGame();
-        triggerFastingPrayer();
-        return;
-    }
-    
-    battle.turn++;
-    saveGame();
-    renderBattleScreen();
+        updateResourceDisplay();
+        
+        // 重新渲染界面（刷新可用经文状态）
+        renderScriptureDebateScreen();
+    }, 1000);
 }
 
 // ==================== 禁食祷告系统 ====================
@@ -724,34 +959,17 @@ function loadScene(sceneId) {
             loadMemoryGame(scene);
             break;
         case 'puzzle':
-            // 将解谜改为属灵争战
+            // 将解谜改为经文对决
             if (scene.gameData && scene.gameData.battleEnemy) {
-                initSpiritualBattle(scene.gameData.battleEnemy);
-                // 绑定技能按钮事件
-                setTimeout(() => {
-                    document.querySelectorAll('.skill-btn').forEach(btn => {
-                        btn.addEventListener('click', (e) => {
-                            const skillName = e.currentTarget.dataset.skill;
-                            executeBattleTurn(skillName);
-                        });
-                    });
-                }, 100);
+                initScriptureDebate(scene.gameData.battleEnemy);
             } else {
                 // 兼容旧版，使用原有解谜
                 loadPuzzleGame(scene);
             }
             break;
         case 'spiritual_battle':
-            // 新的属灵争战类型
-            initSpiritualBattle(scene.gameData.battleEnemy);
-            setTimeout(() => {
-                document.querySelectorAll('.skill-btn').forEach(btn => {
-                    btn.addEventListener('click', (e) => {
-                        const skillName = e.currentTarget.dataset.skill;
-                        executeBattleTurn(skillName);
-                    });
-                });
-            }, 100);
+            // 经文对决类型
+            initScriptureDebate(scene.gameData.battleEnemy);
             break;
         case 'quiz':
             startQuiz();
