@@ -1041,6 +1041,212 @@ const GameData = {
         baseRecovery: { faith: 50, supplies: 10 }
     },
 
+    // Phase 3: 教会稳固度评价系统
+    churchHealthSystem: {
+        // 4维度评价标准
+        dimensions: {
+            foundation: {
+                name: "根基",
+                description: "神学知识的扎实程度",
+                icon: "📚",
+                maxScore: 100,
+                calculate: function(gameState) {
+                    // 基于测验得分计算
+                    const quizScore = gameState.quizScore || 0;
+                    const maxQuiz = GameData.quiz.length;
+                    return Math.min(100, (quizScore / maxQuiz) * 100);
+                }
+            },
+            disciples: {
+                name: "门徒",
+                description: "建立的门徒群体规模",
+                icon: "👥",
+                maxScore: 100,
+                calculate: function(gameState) {
+                    // 基于转化的城市数 + 福音饱和度
+                    let score = 0;
+                    const completedCities = gameState.completedCities || [];
+                    
+                    // 完成城市基础分：每个城市10分
+                    score += completedCities.length * 10;
+                    
+                    // 福音饱和度加分：每个城市饱和度/10
+                    for (const cityKey of completedCities) {
+                        const city = GameData.cities[cityKey];
+                        if (city) {
+                            score += (city.gospel_saturation || 0) / 10;
+                        }
+                    }
+                    
+                    return Math.min(100, score);
+                }
+            },
+            elders: {
+                name: "长老",
+                description: "属灵装备的丰富程度",
+                icon: "📖",
+                maxScore: 100,
+                calculate: function(gameState) {
+                    // 基于收藏的经文数量和质量
+                    const collectedVerses = gameState.collectedVerses || [];
+                    const totalVerses = Object.keys(GameData.verses).length;
+                    
+                    // 基础分：收集比例
+                    let score = (collectedVerses.length / totalVerses) * 60;
+                    
+                    // 加分项：使用经文进行对决的次数
+                    const verseUsage = gameState.verseUsage || {};
+                    let usageCount = 0;
+                    for (const verseKey in verseUsage) {
+                        usageCount += verseUsage[verseKey];
+                    }
+                    score += Math.min(40, usageCount * 2);
+                    
+                    return Math.min(100, score);
+                }
+            },
+            perseverance: {
+                name: "忍耐",
+                description: "历经逼迫后的信念坚守",
+                icon: "✊",
+                maxScore: 100,
+                calculate: function(gameState) {
+                    // 基于最终信念值 + 禁食祷告经历
+                    const finalFaith = gameState.resources?.faith || 0;
+                    const fastingExperience = gameState.fastingExperience || 0;
+                    
+                    // 信念分：剩余信念比例 * 70
+                    let score = (finalFaith / 100) * 70;
+                    
+                    // 禁食祷告经历加分：每次禁食+10分
+                    score += Math.min(30, fastingExperience * 10);
+                    
+                    return Math.min(100, score);
+                }
+            }
+        },
+        
+        // 计算总体教会稳固度
+        calculateOverallHealth: function(gameState) {
+            const dimensions = this.dimensions;
+            let totalScore = 0;
+            const scores = {};
+            
+            for (const key in dimensions) {
+                const score = dimensions[key].calculate(gameState);
+                scores[key] = Math.round(score);
+                totalScore += score;
+            }
+            
+            const averageScore = totalScore / 4;
+            
+            return {
+                scores: scores,
+                overall: Math.round(averageScore),
+                level: this.getHealthLevel(averageScore),
+                evaluation: this.getEvaluation(scores)
+            };
+        },
+        
+        // 根据总分获取等级
+        getHealthLevel: function(score) {
+            if (score >= 80) return {
+                level: 4,
+                name: "使徒级",
+                title: " Apostle",
+                description: "你建立了7个稳固的教会，成为外邦人的光。你的宣教工作堪称典范，门徒们都能恒守真道。",
+                badge: "🏆",
+                color: "#FFD700"
+            };
+            if (score >= 60) return {
+                level: 3,
+                name: "宣教士级",
+                title: "Missionary",
+                description: "你的足迹遍布加拉太，多人信了主。虽然过程艰难，但你建立了坚实的福音基础。",
+                badge: "⭐",
+                color: "#C0C0C0"
+            };
+            if (score >= 40) return {
+                level: 2,
+                name: "门徒级",
+                title: "Disciple",
+                description: "你完成了旅程，但还有更多要学习。继续努力，主的恩典够你用的。",
+                badge: "📖",
+                color: "#CD7F32"
+            };
+            return {
+                level: 1,
+                name: "逃遁级",
+                title: "Fled",
+                description: "在逼迫中逃离，需要重新得力。记住：我们进入神的国，必须经历许多艰难。",
+                badge: "🏃",
+                color: "#8B4513"
+            };
+        },
+        
+        // 获取详细评价
+        getEvaluation: function(scores) {
+            const evaluations = [];
+            
+            // 分析各维度表现
+            if (scores.foundation >= 80) {
+                evaluations.push("📚 神学根基扎实，对圣经有深刻理解");
+            } else if (scores.foundation < 40) {
+                evaluations.push("📚 需要加强圣经学习，加深对真理的认识");
+            }
+            
+            if (scores.disciples >= 80) {
+                evaluations.push("👥 建立了庞大的门徒群体，福音广传");
+            } else if (scores.disciples < 40) {
+                evaluations.push("👥 门徒数量有限，需要更积极地传福音");
+            }
+            
+            if (scores.elders >= 80) {
+                evaluations.push("📖 熟练运用经文，属灵装备丰富");
+            } else if (scores.elders < 40) {
+                evaluations.push("📖 经文收藏不足，需要多收集属灵装备");
+            }
+            
+            if (scores.perseverance >= 80) {
+                evaluations.push("✊ 经历逼迫依然坚守，信心稳固");
+            } else if (scores.perseverance < 40) {
+                evaluations.push("✊ 信心需要坚固，学习在逆境中依靠主");
+            }
+            
+            // 特殊成就
+            if (scores.foundation >= 90 && scores.elders >= 90) {
+                evaluations.push("🎓 卓越的神学家！你对真理的理解令人钦佩");
+            }
+            if (scores.disciples >= 90 && scores.perseverance >= 90) {
+                evaluations.push("🌟 真正的拓荒者！你建立了稳固的教会");
+            }
+            
+            return evaluations;
+        },
+        
+        // 获取改进建议
+        getSuggestions: function(scores) {
+            const suggestions = [];
+            
+            const dimensions = [
+                { key: 'foundation', name: '根基', action: '认真完成每一章的测验' },
+                { key: 'disciples', name: '门徒', action: '多传福音，提升城市福音饱和度' },
+                { key: 'elders', name: '长老', action: '收集更多经文，在战斗中使用' },
+                { key: 'perseverance', name: '忍耐', action: '保持信念，必要时禁食祷告' }
+            ];
+            
+            // 找出最弱的维度
+            const minScore = Math.min(...Object.values(scores));
+            const weakDimensions = dimensions.filter(d => scores[d.key] === minScore);
+            
+            weakDimensions.forEach(d => {
+                suggestions.push(`💡 加强${d.name}：${d.action}`);
+            });
+            
+            return suggestions;
+        }
+    },
+
     // 经文搜索游戏文本
     searchText: {
         acts13: `13:1 在安提阿的教会中，有几位先知和教师，就是巴拿巴和称呼尼结的西面、古利奈人路求，与分封之王希律同养的马念，并扫罗。
@@ -1096,6 +1302,9 @@ const GameState = {
     // 禁食祷告状态
     fastingState: null,
     
+    // Phase 3: 禁食祷告经历次数（用于评价系统）
+    fastingExperience: 0,
+    
     // 当前所在城市索引（用于难度计算）
     currentCityIndex: 0,
     
@@ -1128,8 +1337,9 @@ function saveGame() {
         currentCityIndex: GameState.currentCityIndex,
         verseUsage: GameState.verseUsage,
         citySaturation: citySaturationData,  // Phase 2: 保存城市福音饱和度
+        fastingExperience: GameState.fastingExperience,  // Phase 3: 保存禁食祷告经历
         timestamp: new Date().toISOString(),
-        version: '2.2'
+        version: '2.3'
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
     return true;
@@ -1171,6 +1381,7 @@ function loadGame() {
     GameState.skills = data.skills || { debate: { level: 1, exp: 0, maxExp: 100 }, miracle: { level: 1, exp: 0, maxExp: 100 }, endurance: { level: 1, exp: 0, maxExp: 100 } };
     GameState.currentCityIndex = data.currentCityIndex || 0;
     GameState.verseUsage = data.verseUsage || {};
+    GameState.fastingExperience = data.fastingExperience || 0;  // Phase 3: 恢复禁食祷告经历
     
     // Phase 2: 恢复城市福音饱和度
     if (data.citySaturation) {
@@ -1203,6 +1414,7 @@ function clearSaveData() {
     GameState.fastingState = null;
     GameState.currentCityIndex = 0;
     GameState.verseUsage = {};
+    GameState.fastingExperience = 0;  // Phase 3: 清空禁食祷告经历
     
     // Phase 2: 清空城市福音饱和度
     for (const cityKey in GameData.cities) {

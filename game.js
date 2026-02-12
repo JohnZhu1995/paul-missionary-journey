@@ -747,6 +747,9 @@ function showFastingPrayerModal() {
 function completeFastingPrayer() {
     GameState.fastingState.completed = true;
     
+    // Phase 3: 记录禁食祷告经历
+    GameState.fastingExperience = (GameState.fastingExperience || 0) + 1;
+    
     // 恢复资源
     addResources(GameData.fastingPrayer.baseRecovery);
     
@@ -758,7 +761,7 @@ function completeFastingPrayer() {
     
     // 如果之前有战斗，返回战斗；否则返回地图
     if (GameState.battleState) {
-        renderBattleScreen();
+        renderScriptureDebateScreen();
     } else {
         showScreen('map-screen');
     }
@@ -1723,17 +1726,187 @@ function nextQuizQuestion() {
     }
 }
 
-// 显示完成界面
+// Phase 3: 显示教会稳固度评价界面
+function showChurchHealthEvaluation() {
+    // 计算教会稳固度
+    const healthData = GameData.churchHealthSystem.calculateOverallHealth(GameState);
+    const level = healthData.level;
+    
+    // 创建评价界面
+    const modal = document.createElement('div');
+    modal.id = 'church-health-modal';
+    modal.className = 'modal active';
+    modal.style.cssText = 'background: rgba(0,0,0,0.85); z-index: 2000;';
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 700px; max-height: 90vh; overflow-y: auto; padding: 0;">
+            <!-- 标题区域 -->
+            <div style="background: linear-gradient(135deg, ${level.color} 0%, ${adjustColor(level.color, -20)} 100%); 
+                        padding: 40px 30px; text-align: center; color: white;">
+                <div style="font-size: 60px; margin-bottom: 15px;">${level.badge}</div>
+                <h2 style="margin: 0; font-size: 32px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);">
+                    ${level.name}
+                </h2>
+                <p style="margin: 10px 0 0 0; font-size: 18px; opacity: 0.95;">
+                    ${level.title}
+                </p>
+            </div>
+            
+            <!-- 总体评分 -->
+            <div style="padding: 30px; background: #f9f5f0;">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <div style="font-size: 72px; font-weight: bold; color: ${level.color}; 
+                                text-shadow: 2px 2px 4px rgba(0,0,0,0.1);">
+                        ${healthData.overall}
+                    </div>
+                    <div style="color: #666; font-size: 16px;">教会稳固度总分</div>
+                </div>
+                
+                <!-- 四维度评分 -->
+                <div style="background: white; border-radius: 12px; padding: 25px; margin-bottom: 25px;
+                            box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                    <h3 style="margin: 0 0 20px 0; color: #5c4033; font-size: 18px;">📊 四维评价</h3>
+                    
+                    ${Object.entries(healthData.scores).map(([key, score]) => {
+                        const dim = GameData.churchHealthSystem.dimensions[key];
+                        const percentage = score;
+                        const barColor = percentage >= 80 ? '#4caf50' : 
+                                        percentage >= 60 ? '#8bc34a' :
+                                        percentage >= 40 ? '#ffc107' : '#f44336';
+                        
+                        return `
+                            <div style="margin-bottom: 20px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <span style="font-size: 20px;">${dim.icon}</span>
+                                        <span style="font-weight: bold; color: #5c4033;">${dim.name}</span>
+                                        <span style="font-size: 12px; color: #999;">${dim.description}</span>
+                                    </div>
+                                    <span style="font-weight: bold; font-size: 20px; color: ${barColor};">${Math.round(score)}</span>
+                                </div>
+                                <div style="background: #e0e0e0; height: 10px; border-radius: 5px; overflow: hidden;">
+                                    <div style="background: ${barColor}; height: 100%; width: ${percentage}%; 
+                                                border-radius: 5px; transition: width 1s ease-out;"></div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+                
+                <!-- 等级描述 -->
+                <div style="background: white; border-radius: 12px; padding: 25px; margin-bottom: 25px;
+                            box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-left: 5px solid ${level.color};">
+                    <h3 style="margin: 0 0 15px 0; color: #5c4033; font-size: 18px;">📝 评价</h3>
+                    <p style="margin: 0; line-height: 1.8; color: #5c4033; font-size: 15px;">
+                        ${level.description}
+                    </p>
+                </div>
+                
+                <!-- 详细评价 -->
+                ${healthData.evaluation.length > 0 ? `
+                    <div style="background: white; border-radius: 12px; padding: 25px; margin-bottom: 25px;
+                                box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                        <h3 style="margin: 0 0 15px 0; color: #5c4033; font-size: 18px;">✨ 成就</h3>
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            ${healthData.evaluation.map(eva => `
+                                <div style="padding: 12px; background: #f5f5dc; border-radius: 8px; 
+                                            font-size: 14px; color: #5c4033;">
+                                    ${eva}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <!-- 改进建议 -->
+                ${healthData.level.level < 4 ? `
+                    <div style="background: white; border-radius: 12px; padding: 25px; margin-bottom: 25px;
+                                box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                        <h3 style="margin: 0 0 15px 0; color: #5c4033; font-size: 18px;">💡 成长建议</h3>
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            ${GameData.churchHealthSystem.getSuggestions(healthData.scores).map(suggestion => `
+                                <div style="padding: 12px; background: #fff3e0; border-radius: 8px; 
+                                            font-size: 14px; color: #5c4033; border-left: 3px solid #ff9800;">
+                                    ${suggestion}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <!-- 按钮 -->
+                <div style="display: flex; gap: 15px; justify-content: center; padding-top: 20px; 
+                            border-top: 2px solid #e0e0e0;">
+                    <button id="btn-replay-with-evaluation" class="btn-primary" style="padding: 15px 40px; font-size: 16px;">
+                        🔄 再次宣教
+                    </button>
+                    <button id="btn-main-menu-with-evaluation" class="btn-secondary" style="padding: 15px 40px; font-size: 16px;">
+                        🏠 返回主菜单
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // 绑定按钮事件
+    document.getElementById('btn-replay-with-evaluation').addEventListener('click', () => {
+        modal.remove();
+        clearSaveData();
+        startNewGame();
+    });
+    
+    document.getElementById('btn-main-menu-with-evaluation').addEventListener('click', () => {
+        modal.remove();
+        showScreen('title-screen');
+    });
+    
+    // 显示评价界面
+    showScreen('complete-screen');
+}
+
+// 辅助函数：调整颜色亮度
+function adjustColor(color, amount) {
+    const usePound = color[0] === '#';
+    const col = usePound ? color.slice(1) : color;
+    const num = parseInt(col, 16);
+    let r = (num >> 16) + amount;
+    let g = ((num >> 8) & 0x00FF) + amount;
+    let b = (num & 0x00FF) + amount;
+    r = r > 255 ? 255 : r < 0 ? 0 : r;
+    g = g > 255 ? 255 : g < 0 ? 0 : g;
+    b = b > 255 ? 255 : b < 0 ? 0 : b;
+    return (usePound ? '#' : '') + (g | (b << 8) | (r << 16)).toString(16).padStart(6, '0');
+}
+
+// 显示完成界面 - Phase 3: 更新为显示教会稳固度评价
 function showCompletionScreen() {
+    // 先显示原有统计数据
     const stats = document.getElementById('stats-display');
+    const completedCount = GameState.completedCities.length;
+    const totalCities = Object.keys(GameData.cities).length;
+    
+    // 计算平均福音饱和度
+    let totalSaturation = 0;
+    let cityCount = 0;
+    for (const cityKey in GameData.cities) {
+        const city = GameData.cities[cityKey];
+        if (city.gospel_saturation > 0) {
+            totalSaturation += city.gospel_saturation;
+            cityCount++;
+        }
+    }
+    const avgSaturation = cityCount > 0 ? Math.round(totalSaturation / cityCount) : 0;
+    
     stats.innerHTML = `
         <div class="stat-item">
-            <div class="stat-value">${GameState.quizScore}/${GameData.quiz.length}</div>
-            <div class="stat-label">测验得分</div>
+            <div class="stat-value">${completedCount}/${totalCities}</div>
+            <div class="stat-label">转化城市</div>
         </div>
         <div class="stat-item">
-            <div class="stat-value">${GameState.totalScore}</div>
-            <div class="stat-label">总分数</div>
+            <div class="stat-value">${avgSaturation}%</div>
+            <div class="stat-label">平均福音饱和度</div>
         </div>
         <div class="stat-item">
             <div class="stat-value">${GameState.collectedVerses.length}</div>
@@ -1742,6 +1915,11 @@ function showCompletionScreen() {
     `;
     
     showScreen('complete-screen');
+    
+    // 延迟显示教会稳固度评价
+    setTimeout(() => {
+        showChurchHealthEvaluation();
+    }, 1500);
     
     // 清除存档
     localStorage.removeItem(SAVE_KEY);
