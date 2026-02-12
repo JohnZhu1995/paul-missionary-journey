@@ -81,13 +81,16 @@ function applyVerseEffects(effects) {
         GameState.battleState.enemyCurrentResistance += effects.enemy_resistance;
     }
     
+    // Phase 2: 福音饱和度效果
     if (effects.gospel_saturation) {
-        // 增加当前城市的福音饱和度
-        const currentCity = GameData.scenes[currentScene].city;
-        if (currentCity) {
-            const city = GameData.cities[currentCity];
-            if (city) {
-                city.gospel_saturation = (city.gospel_saturation || 0) + effects.gospel_saturation;
+        const currentCityKey = GameData.scenes[currentScene].city;
+        if (currentCityKey) {
+            const actualIncrease = GameData.gospelSaturationSystem.increaseSaturation(
+                currentCityKey, 
+                effects.gospel_saturation
+            );
+            if (actualIncrease > 0) {
+                showHint(`${GameData.cities[currentCityKey].name}的福音饱和度增加了${actualIncrease}点！`);
             }
         }
     }
@@ -280,12 +283,16 @@ function triggerTravelEvent(fromCity, toCity) {
         GameState.currentCityIndex
     );
     
-    // 获取所有事件并计算概率
+    // Phase 2: 获取目标城市的福音饱和度
+    const toCityData = GameData.cities[toCity];
+    const citySaturation = toCityData ? (toCityData.gospel_saturation || 0) : 0;
+    
+    // 获取所有事件并计算概率 - 现在考虑福音饱和度
     const events = Object.values(GameData.travelEvents);
     const weightedEvents = events.map(event => ({
         ...event,
         currentProbability: GameData.difficultySystem.calculateEventProbability(
-            event, GameState.skills, GameState.resources
+            event, GameState.skills, GameState.resources, toCity
         )
     }));
     
@@ -305,19 +312,46 @@ function triggerTravelEvent(fromCity, toCity) {
     // 检查是否能应对（资源是否足够）
     const canHandle = !selectedEvent.requires || hasEnoughResources(selectedEvent.requires);
     
+    // Phase 2: 显示福音饱和度信息
+    if (citySaturation > 0) {
+        const satInfo = GameData.gospelSaturationSystem.getSaturationLevel(citySaturation);
+        console.log(`前往${toCityData.name}，福音饱和度：${satInfo.name} (${citySaturation}%)`);
+    }
+    
     // 显示旅行事件
-    showTravelEventModal(selectedEvent, canHandle, toCity);
+    showTravelEventModal(selectedEvent, canHandle, toCity, citySaturation);
 }
 
 // 显示旅行事件弹窗
-function showTravelEventModal(event, canHandle, nextScene) {
+function showTravelEventModal(event, canHandle, nextScene, citySaturation = 0) {
     const modal = document.createElement('div');
     modal.id = 'travel-event-modal';
     modal.className = 'modal active';
+    
+    // Phase 2: 显示福音饱和度信息
+    let saturationHTML = '';
+    if (citySaturation > 0) {
+        const satInfo = GameData.gospelSaturationSystem.getSaturationLevel(citySaturation);
+        const effects = GameData.gospelSaturationSystem.getSaturationEffects(citySaturation);
+        saturationHTML = `
+            <div style="background: ${satInfo.color}15; border-left: 4px solid ${satInfo.color}; padding: 12px; border-radius: 4px; margin-bottom: 15px;">
+                <p style="margin: 0; color: ${satInfo.color}; font-weight: bold;">
+                    📊 福音状况：${satInfo.name} (${citySaturation}%)
+                </p>
+                ${effects.length > 0 ? `
+                    <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">
+                        效果：${effects.join('、')}
+                    </p>
+                ` : ''}
+            </div>
+        `;
+    }
+    
     modal.innerHTML = `
         <div class="modal-content" style="max-width: 500px;">
             <h2 style="color: #8b4513; margin-bottom: 20px;">${event.name}</h2>
             <p style="font-size: 16px; line-height: 1.6; margin-bottom: 20px;">${event.description}</p>
+            ${saturationHTML}
             <div style="background: #f5f5dc; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
                 <p style="margin: 5px 0;"><strong>预计影响：</strong></p>
                 ${event.effect.faith ? `<p style="margin: 5px 0;">信念：${event.effect.faith > 0 ? '+' : ''}${event.effect.faith}</p>` : ''}
@@ -356,8 +390,11 @@ function initScriptureDebate(enemyId) {
         GameState.currentCityIndex
     );
     
-    // 根据动态难度缩放敌人
-    const enemy = GameData.difficultySystem.scaleEnemy(enemyTemplate, targetDifficulty);
+    // Phase 2: 获取当前城市key
+    const currentCityKey = GameData.scenes[currentScene]?.city;
+    
+    // 根据动态难度缩放敌人 - 现在考虑福音饱和度
+    const enemy = GameData.difficultySystem.scaleEnemy(enemyTemplate, targetDifficulty, currentCityKey);
     
     GameState.battleState = {
         enemy: enemy,
@@ -365,8 +402,18 @@ function initScriptureDebate(enemyId) {
         turn: 1,
         log: [],
         usedVerses: [],  // 本对决中使用过的经文
-        awaitingVerse: true  // 等待玩家选择经文
+        awaitingVerse: true,  // 等待玩家选择经文
+        cityKey: currentCityKey  // Phase 2: 记录城市key
     };
+    
+    // Phase 2: 显示城市福音饱和度信息
+    if (currentCityKey) {
+        const city = GameData.cities[currentCityKey];
+        if (city && city.gospel_saturation > 0) {
+            const satInfo = GameData.gospelSaturationSystem.getSaturationLevel(city.gospel_saturation);
+            GameState.battleState.log.push(`📊 ${city.name}福音状况：${satInfo.name} (${city.gospel_saturation}%)`);
+        }
+    }
     
     renderScriptureDebateScreen();
 }
@@ -541,6 +588,20 @@ function executeScriptureDebateTurn(verseKey) {
             
             // 增加技能经验
             addSkillExp('debate', rewards.exp || 20);
+            
+            // Phase 2: 增加福音饱和度
+            if (battle.cityKey && rewards.gospelSaturation) {
+                const actualIncrease = GameData.gospelSaturationSystem.increaseSaturation(
+                    battle.cityKey, 
+                    rewards.gospelSaturation
+                );
+                if (actualIncrease > 0) {
+                    const city = GameData.cities[battle.cityKey];
+                    const newSaturation = city.gospel_saturation;
+                    const satInfo = GameData.gospelSaturationSystem.getSaturationLevel(newSaturation);
+                    battle.log.push(`📈 ${city.name}的福音状况提升至 ${satInfo.name} (${newSaturation}%)！`);
+                }
+            }
         }
         
         saveGame();
@@ -893,6 +954,139 @@ function updateMapProgress() {
     updateResourceDisplay();
 }
 
+// 显示城市百科卡片
+function showCityLoreCard(cityKey, canEnter) {
+    const city = GameData.cities[cityKey];
+    if (!city) return;
+    
+    const saturation = city.gospel_saturation || 0;
+    const satInfo = GameData.gospelSaturationSystem.getSaturationLevel(saturation);
+    const effects = GameData.gospelSaturationSystem.getSaturationEffects(saturation);
+    
+    const modal = document.createElement('div');
+    modal.id = 'city-lore-modal';
+    modal.className = 'modal active';
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
+            <div style="border-bottom: 2px solid #d4a574; padding-bottom: 15px; margin-bottom: 20px;">
+                <h2 style="color: #5c4033; margin: 0;">${city.name} <span style="font-size: 0.6em; color: #8b7355;">${city.nameEn}</span></h2>
+                <p style="color: #8b7355; margin: 5px 0 0 0; font-size: 14px;">${city.description}</p>
+            </div>
+            
+            <!-- 福音饱和度 -->
+            <div style="background: ${satInfo.color}15; border-left: 4px solid ${satInfo.color}; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <span style="color: ${satInfo.color}; font-weight: bold;">📊 福音状况：${satInfo.name}</span>
+                    <span style="font-size: 20px; font-weight: bold; color: ${satInfo.color};">${saturation}%</span>
+                </div>
+                <div style="background: #ddd; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 10px;">
+                    <div style="background: ${satInfo.color}; height: 100%; width: ${saturation}%; transition: width 0.3s;"></div>
+                </div>
+                ${effects.length > 0 ? `
+                    <p style="margin: 0; font-size: 12px; color: #666;">
+                        ✨ ${effects.join('、')}
+                    </p>
+                ` : '<p style="margin: 0; font-size: 12px; color: #999;">继续传福音以提升状况...</p>'}
+            </div>
+            
+            <!-- 城市特性 -->
+            <div style="background: #f5f5dc; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <h3 style="color: #5c4033; margin: 0 0 10px 0; font-size: 16px;">🌍 城市特性</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px;">
+                    <div>
+                        <span style="color: #8b7355;">民性：</span>
+                        <span>${getTemperamentName(city.traits.people_temperament)}</span>
+                    </div>
+                    <div>
+                        <span style="color: #8b7355;">敌对等级：</span>
+                        <span>${'★'.repeat(city.traits.opposition_level)}${'☆'.repeat(5 - city.traits.opposition_level)}</span>
+                    </div>
+                    <div style="grid-column: 1/-1;">
+                        <span style="color: #8b7355;">宗教背景：</span>
+                        <span>${getReligiousBackgroundName(city.traits.religious_background)}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 民俗百科 -->
+            <div style="margin-bottom: 20px;">
+                <h3 style="color: #5c4033; margin: 0 0 15px 0; font-size: 16px;">📚 民俗百科</h3>
+                
+                <div style="margin-bottom: 15px;">
+                    <h4 style="color: #8b4513; margin: 0 0 5px 0; font-size: 14px;">📍 地理位置</h4>
+                    <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #5c4033;">${city.lore.location}</p>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <h4 style="color: #8b4513; margin: 0 0 5px 0; font-size: 14px;">🏛️ 风俗习惯</h4>
+                    <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #5c4033;">${city.lore.customs}</p>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <h4 style="color: #8b4513; margin: 0 0 5px 0; font-size: 14px;">📖 历史背景</h4>
+                    <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #5c4033;">${city.lore.historical_note}</p>
+                </div>
+                
+                <div style="background: #fff3e0; padding: 12px; border-radius: 6px; border-left: 3px solid #ff9800;">
+                    <h4 style="color: #e65100; margin: 0 0 5px 0; font-size: 14px;">⚠️ 宣教挑战</h4>
+                    <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #5c4033;">${city.lore.challenge}</p>
+                </div>
+            </div>
+            
+            <!-- 按钮 -->
+            <div style="display: flex; gap: 10px; justify-content: center; padding-top: 15px; border-top: 1px solid #e0e0e0;">
+                ${canEnter ? 
+                    `<button id="btn-enter-city" class="btn-primary">进入城市</button>` :
+                    `<button class="btn-secondary" disabled>需要先完成前置城市</button>`
+                }
+                <button id="btn-close-lore" class="btn-secondary">返回地图</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // 绑定事件
+    if (canEnter) {
+        document.getElementById('btn-enter-city').addEventListener('click', () => {
+            modal.remove();
+            enterCityScene(cityKey);
+        });
+    }
+    
+    document.getElementById('btn-close-lore').addEventListener('click', () => {
+        modal.remove();
+    });
+}
+
+// 辅助函数：获取民性名称
+function getTemperamentName(temperament) {
+    const names = {
+        'open': '开放包容',
+        'mixed': '复杂多元',
+        'curious': '好奇求知',
+        'divided': '分裂对立',
+        'fickle': '善变多疑',
+        'receptive': '虚心受教',
+        'welcoming': '热情欢迎'
+    };
+    return names[temperament] || temperament;
+}
+
+// 辅助函数：获取宗教背景名称
+function getReligiousBackgroundName(background) {
+    const names = {
+        'jewish_christian': '犹太-基督教背景',
+        'pagan_jewish': '异教-犹太混合',
+        'jewish_godfearer': '犹太教与敬畏神者',
+        'mixed': '多元宗教',
+        'pagan': '异教背景',
+        'open': '开放宗教环境',
+        'christian': '基督教环境'
+    };
+    return names[background] || background;
+}
+
 // 处理城市点击
 function handleCityClick(cityKey) {
     // 检查是否可以进入该城市
@@ -908,13 +1102,8 @@ function handleCityClick(cityKey) {
         }
     }
     
-    if (!canEnter && cityKey !== 'antioch') {
-        showHint('你需要按顺序完成前面的城市才能进入这里。');
-        return;
-    }
-    
-    // 进入城市场景
-    enterCityScene(cityKey);
+    // Phase 2: 先显示城市百科卡片
+    showCityLoreCard(cityKey, canEnter || cityKey === 'antioch');
 }
 
 // 进入城市场景

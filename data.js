@@ -899,7 +899,7 @@ const GameData = {
         }
     },
 
-    // 动态难度算法
+    // 动态难度算法 - Phase 2: 加入福音饱和度影响
     difficultySystem: {
         // 计算玩家技能点总和 S
         calculateSkillPoints: function(skills) {
@@ -922,21 +922,28 @@ const GameData = {
             return Math.max(1, S + sigma);
         },
         
-        // 根据目标难度调整敌人属性
-        scaleEnemy: function(enemy, targetDifficulty) {
-            const scaleFactor = targetDifficulty / enemy.difficulty;
+        // 根据目标难度调整敌人属性 - 考虑福音饱和度
+        scaleEnemy: function(enemy, targetDifficulty, cityKey) {
+            const city = GameData.cities[cityKey];
+            const saturation = city ? (city.gospel_saturation || 0) : 0;
+            
+            // 福音饱和度降低敌人抵抗力（最高降低30%）
+            const saturationFactor = 1 - (saturation / 100) * 0.3;
+            
+            const scaleFactor = (targetDifficulty / enemy.difficulty) * saturationFactor;
             return {
                 ...enemy,
                 resistance: Math.floor(enemy.baseResistance * scaleFactor),
                 rewards: {
                     exp: Math.floor(20 * scaleFactor),
-                    influence: Math.floor(5 * scaleFactor)
+                    influence: Math.floor(5 * scaleFactor),
+                    gospelSaturation: Math.floor(5 * (1 + saturation / 100))  // 胜利后增加的饱和度
                 }
             };
         },
         
-        // 计算旅行事件概率（根据玩家技能动态调整）
-        calculateEventProbability: function(event, skills, resources) {
+        // 计算旅行事件概率（根据玩家技能、资源和福音饱和度动态调整）
+        calculateEventProbability: function(event, skills, resources, cityKey) {
             const baseProb = event.baseProbability;
             const S = this.calculateSkillPoints(skills);
             
@@ -947,11 +954,61 @@ const GameData = {
             const supplyFactor = resources.supplies > 50 ? -0.05 : 
                                 resources.supplies < 20 ? 0.05 : 0;
             
-            if (event.difficulty <= 2) {
-                return Math.min(0.5, baseProb + skillFactor * 0.5);
-            } else {
-                return Math.max(0.02, baseProb - skillFactor + supplyFactor);
+            // Phase 2: 福音饱和度影响 - 饱和度高时，负面事件概率降低
+            let saturationFactor = 0;
+            if (cityKey) {
+                const city = GameData.cities[cityKey];
+                if (city) {
+                    const saturation = city.gospel_saturation || 0;
+                    // 饱和度每增加10，负面事件概率降低1%
+                    saturationFactor = -(saturation / 100) * 0.1;
+                }
             }
+            
+            if (event.difficulty <= 2) {
+                // 正面事件：技能增加概率
+                return Math.min(0.5, baseProb + skillFactor * 0.5 + saturationFactor * 0.5);
+            } else {
+                // 负面事件：技能和饱和度降低概率
+                return Math.max(0.02, baseProb - skillFactor + supplyFactor + saturationFactor);
+            }
+        }
+    },
+    
+    // 福音饱和度系统 - Phase 2
+    gospelSaturationSystem: {
+        // 增加城市福音饱和度
+        increaseSaturation: function(cityKey, amount) {
+            const city = GameData.cities[cityKey];
+            if (!city) return 0;
+            
+            const oldSaturation = city.gospel_saturation || 0;
+            const newSaturation = Math.min(100, oldSaturation + amount);
+            city.gospel_saturation = newSaturation;
+            
+            // 保存游戏
+            saveGame();
+            
+            return newSaturation - oldSaturation;  // 返回实际增加量
+        },
+        
+        // 获取城市饱和度等级描述
+        getSaturationLevel: function(saturation) {
+            if (saturation >= 80) return { level: 5, name: "福音广传", color: "#2e7d32" };
+            if (saturation >= 60) return { level: 4, name: "教会稳固", color: "#689f38" };
+            if (saturation >= 40) return { level: 3, name: "信徒增长", color: "#9e9d24" };
+            if (saturation >= 20) return { level: 2, name: "初有果效", color: "#f57f17" };
+            return { level: 1, name: "刚刚起步", color: "#e65100" };
+        },
+        
+        // 获取饱和度对游戏的影响描述
+        getSaturationEffects: function(saturation) {
+            const effects = [];
+            if (saturation >= 20) effects.push("敌对势力抵抗力降低");
+            if (saturation >= 40) effects.push("负面事件概率减少");
+            if (saturation >= 60) effects.push("经文对决伤害增加");
+            if (saturation >= 80) effects.push("获得额外影响力奖励");
+            return effects;
         }
     },
 
@@ -1052,6 +1109,15 @@ const SAVE_KEY_LEGACY = 'paulJourney_saveData_chapter1';
 
 // 保存游戏
 function saveGame() {
+    // Phase 2: 收集城市福音饱和度数据
+    const citySaturationData = {};
+    for (const cityKey in GameData.cities) {
+        const city = GameData.cities[cityKey];
+        if (city.gospel_saturation && city.gospel_saturation > 0) {
+            citySaturationData[cityKey] = city.gospel_saturation;
+        }
+    }
+    
     const saveData = {
         currentScene: GameState.currentScene,
         completedCities: GameState.completedCities,
@@ -1061,8 +1127,9 @@ function saveGame() {
         skills: GameState.skills,
         currentCityIndex: GameState.currentCityIndex,
         verseUsage: GameState.verseUsage,
+        citySaturation: citySaturationData,  // Phase 2: 保存城市福音饱和度
         timestamp: new Date().toISOString(),
-        version: '2.1'
+        version: '2.2'
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
     return true;
@@ -1104,6 +1171,16 @@ function loadGame() {
     GameState.skills = data.skills || { debate: { level: 1, exp: 0, maxExp: 100 }, miracle: { level: 1, exp: 0, maxExp: 100 }, endurance: { level: 1, exp: 0, maxExp: 100 } };
     GameState.currentCityIndex = data.currentCityIndex || 0;
     GameState.verseUsage = data.verseUsage || {};
+    
+    // Phase 2: 恢复城市福音饱和度
+    if (data.citySaturation) {
+        for (const cityKey in data.citySaturation) {
+            if (GameData.cities[cityKey]) {
+                GameData.cities[cityKey].gospel_saturation = data.citySaturation[cityKey];
+            }
+        }
+    }
+    
     return true;
 }
 
@@ -1126,6 +1203,11 @@ function clearSaveData() {
     GameState.fastingState = null;
     GameState.currentCityIndex = 0;
     GameState.verseUsage = {};
+    
+    // Phase 2: 清空城市福音饱和度
+    for (const cityKey in GameData.cities) {
+        GameData.cities[cityKey].gospel_saturation = 0;
+    }
 }
 
 // 收藏经文
