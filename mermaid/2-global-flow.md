@@ -5,14 +5,14 @@ sequenceDiagram
     participant User as 用户
     participant Main as main.ts
     participant Engine as game-engine.ts
-    participant Player as player.ts
+    participant Team as team.ts
     participant Companion as companion.ts
     participant City as city.ts
     participant Letter as letter.ts
 
     User->>Main: 启动游戏
     Main->>Engine: new GameEngine()
-    Engine->>Player: new Player()
+    Engine->>Team: new Team()
     Engine->>City: 初始化城市
     Engine->>Letter: new LetterSystem()
     
@@ -27,7 +27,9 @@ sequenceDiagram
             User->>Main: 选择行动(1-5)
             Main->>Engine: handleAction()
             
-            Engine->>Player: applyEffects()
+            Engine->>Team: applyEffects()
+            Engine->>Team: consumeResources()
+            Engine->>Team: rest()
             Engine->>Companion: assignTask()
             Engine->>Companion: recoverStamina()
             Engine->>City: nextRound()
@@ -53,3 +55,7 @@ sequenceDiagram
         Main->>User: 显示游戏结束
     end
 ```
+
+## 说明
+
+当前代码使用 `Team` 类管理团队资源，与 `Player` 类功能有重叠，存在职责不清的风险
