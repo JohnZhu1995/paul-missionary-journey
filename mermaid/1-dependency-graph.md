@@ -9,15 +9,15 @@ graph LR
     subgraph 核心逻辑层
         ENGINE[game-engine.ts]
         PLAYER[player.ts]
+        TEAM[team.ts]
         COMPANION[companion.ts]
         CITY[city.ts]
         LETTER[letter.ts]
-        TEAM[team.ts]
     end
     
     subgraph 配置层
         EVENTS[events.ts]
-        CONSTANTS[constants.js]
+        CONSTANTS[constants.ts]
     end
     
     subgraph 类型层
@@ -26,6 +26,7 @@ graph LR
     
     MAIN --> ENGINE
     ENGINE --> PLAYER
+    ENGINE --> TEAM
     ENGINE --> COMPANION
     ENGINE --> CITY
     ENGINE --> LETTER
@@ -33,11 +34,12 @@ graph LR
     ENGINE --> CONSTANTS
     
     PLAYER --> TYPES
+    TEAM --> COMPANION
+    TEAM --> CONSTANTS
+    TEAM --> TYPES
     COMPANION --> TYPES
     CITY --> CONSTANTS
     LETTER --> TYPES
-    TEAM --> COMPANION
-    TEAM --> CONSTANTS
     
     CONSTANTS --> TYPES
 ```

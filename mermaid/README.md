@@ -13,6 +13,7 @@
 | 7 | [7-city-flow.md](./7-city-flow.md) | city.ts 城市状态流程图 |
 | 8 | [8-letter-flow.md](./8-letter-flow.md) | letter.ts 书信系统流程图 |
 | 9 | [9-constants-flow.md](./9-constants-flow.md) | constants.ts 配置常量流程图 |
+| 10 | [10-team-flow.md](./10-team-flow.md) | team.ts 团队管理流程图 |
 
 ## 风险点汇总
 
@@ -21,6 +22,7 @@
 | **main.ts** | 游戏循环中多次调用 `console.clear()` 可能导致终端闪烁 |
 | **game-engine.ts** | `endOfRoundSettlement` 中暴动事件缺乏冷却机制 |
 | **player.ts** | 资源上限硬编码，`consumeResources` 存在原子性问题 |
+| **team.ts** | 与Player类功能高度重叠，职责不清；资源管理逻辑分散 |
 | **companion.ts** | 专长加成硬编码，新专长需修改代码 |
 | **city.ts** | 城市数据不可变，切换需重建；maxTurns 无法动态调整 |
 | **letter.ts** | 书信效果固定无随机性，数据未持久化 |
@@ -33,8 +35,8 @@
 │           入口层 (main.ts)              │
 ├─────────────────────────────────────────┤
 │         核心逻辑层                        │
-│  game-engine.ts / player.ts / companion.ts │
-│  city.ts / letter.ts / team.ts          │
+│  game-engine.ts / player.ts / team.ts    │
+│  companion.ts / city.ts / letter.ts     │
 ├─────────────────────────────────────────┤
 │          配置层                          │
 │    events.ts / constants.ts              │
