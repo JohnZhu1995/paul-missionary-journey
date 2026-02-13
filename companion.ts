@@ -148,6 +148,11 @@ class Companion {
     return `${this.nameChinese}[${this.specialtyName}] 体:${this.stamina.toString().padStart(3)} 士:${this.morale.toString().padStart(3)}% ${effSymbol}`;
   }
   
+  // 团队视图格式
+  getTeamViewStatus(): string {
+    return `${this.nameChinese}[${this.specialtyName}] 💪${this.stamina}  😊${this.morale}%`;
+  }
+  
   private getProgressBar(value: number, max: number, width: number): string {
     const filled = Math.round((value / max) * width);
     const empty = width - filled;

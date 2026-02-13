@@ -113,6 +113,25 @@ class Player {
 │  士气 (Morale):        ${this.morale.toString().padStart(3)}/100  │
 └─────────────────────────────────────────┘`;
   }
+  
+  // 团队视图状态 - 返回关键资源对象
+  getTeamViewStatus(): { 
+    stamina: string;
+    provision: string;
+    stability: string;
+    persecution: string;
+    reputation: string;
+    faith: string;
+  } {
+    return {
+      stamina: `${this.stamina}/${this.maxStamina}`,
+      provision: `${this.provision}/150`,
+      stability: `${this.stability}/100`,
+      persecution: `${this.persecution}/100`,
+      reputation: `${this.reputation}/200`,
+      faith: `${this.faith}/200`,
+    };
+  }
 
   // 紧凑格式状态显示（单行）
   getCompactStatus(): string {
