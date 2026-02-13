@@ -70,9 +70,12 @@ async function runInteractiveMode(): Promise<void> {
 
   while (!game.isGameOver) {
     console.clear?.();
-    displayGameState(game, lastAction, lastCompanionResults);
+    displayCompactStatus(game);
     
-    const actionChoice = await question('\n🎯 为保罗选择行动 > ');
+    // 显示保罗行动选项
+    displayActionOptions();
+    
+    const actionChoice = await question('\n👤 为保罗选择行动 > ');
     
     if (actionChoice.toLowerCase() === 'q') {
       console.log('\n👋 感谢游玩！再见！');
@@ -96,15 +99,18 @@ async function runInteractiveMode(): Promise<void> {
     }
 
     const action = ACTIONS[actionType];
-    lastAction = `保罗: ${action.nameChinese}`;
+    lastAction = action.nameChinese;
     
+    // 选择同工任务
     const companionActions = await assignCompanionTasks(game, question);
     
+    // 执行行动
     const result = game.handleAction(actionType, companionActions);
     
-    lastCompanionResults = result.split('\n').filter(line => line.includes('✅') || line.includes('❌'));
+    lastCompanionResults = result.split('\n').filter(line => line.includes('✅') || line.includes('❌') || line.includes('✉️'));
     
-    console.log('\n' + result);
+    // 显示结果
+    displayResult(lastAction, lastCompanionResults);
 
     const eventResult = game.triggerEvent();
     if (eventResult.event) {
@@ -115,7 +121,7 @@ async function runInteractiveMode(): Promise<void> {
       }
     }
 
-    await question('\n按 Enter 继续...');
+    await question('\n按 Enter 继续下一回合...');
     lastAction = '';
     lastCompanionResults = [];
   }
@@ -151,23 +157,15 @@ function formatEffect(effect: ResourceChange, isCost: boolean = false): string {
   return parts.length > 0 ? parts.join(' ') : '无';
 }
 
-function formatActionCard(key: string, action: Action, index: number): string {
-  const cost = formatEffect(action.cost, true);
-  const effect = formatEffect(action.effect);
-  const emojis = ['📢', '🏕️', '👥', '😴', '✉️'];
-  return `│ ${index}[${emojis[index-1]}${action.nameChinese}] 消耗:${cost} 收益:${effect}`;
-}
-
-function displayGameState(game: GameEngine, lastAction?: string, companionResults?: string[]): void {
-  console.log('\n╔═══════════════════════════════════════════════════════╗');
-  console.log(`║  📍 ${(game.currentCity?.nameChinese || '').padEnd(6)}  │  回合 ${game.currentCity?.currentTurn || 1}/${game.currentCity?.maxTurns || 5}  ║`);
-  console.log('╠═══════════════════════════════════════════════════════╣');
-  
+function displayCompactStatus(game: GameEngine): void {
   const p = game.player;
-  const statusLine = `║  ❤️体:${String(p.stamina).padStart(3)}/100 🍞物:${String(p.provision).padStart(3)}/150 ⛪稳:${String(p.stability).padStart(3)}/100`;
-  console.log(statusLine.padEnd(60) + '║');
-  const statusLine2 = `║  ✝️信:${String(p.faith).padStart(3)}/200 🔥逼:${String(p.persecution).padStart(3)}/100 ⭐声:${String(p.reputation).padStart(3)}/200`;
-  console.log(statusLine2.padEnd(60) + '║');
+  const city = game.currentCity;
+  
+  console.log('\n╔═══════════════════════════════════════════════════════╗');
+  console.log(`║  📍 ${(city?.nameChinese || '').padEnd(8)}  │  第 ${city?.currentTurn || 1}/${city?.maxTurns || 5} 回合  ║`);
+  console.log('╠═══════════════════════════════════════════════════════╣');
+  console.log(`║  ❤️ 体力 ${String(p.stamina).padStart(3)}/100   🍞 物资 ${String(p.provision).padStart(3)}/150   ⛪ 稳定 ${String(p.stability).padStart(3)}/100`);
+  console.log(`║  ✝️ 信心 ${String(p.faith).padStart(3)}/200   🔥 逼迫 ${String(p.persecution).padStart(3)}/100   ⭐ 名声 ${String(p.reputation).padStart(3)}/200`);
   
   if (game.companions.length > 0) {
     console.log('╠═══════════════════════════════════════════════════════╣');
@@ -178,29 +176,67 @@ function displayGameState(game: GameEngine, lastAction?: string, companionResult
       }
     });
   }
-  
+  console.log('╚═══════════════════════════════════════════════════════╝');
+}
+
+function displayActionOptions(): void {
+  console.log('\n╔═══════════════════════════════════════════════════════╗');
+  console.log('║  🎯 保罗行动选择 (消耗 → 收益)                       ║');
   console.log('╠═══════════════════════════════════════════════════════╣');
-  console.log('║  🎯 行动选项 (消耗 → 收益):');
   
-  const actionKeys: ActionType[] = ['preach', 'tentmaking', 'disciple', 'rest', 'write_letter'];
-  actionKeys.forEach((key, idx) => {
-    console.log(formatActionCard(key, ACTIONS[key], idx + 1));
+  const actionData: {key: ActionType, emoji: string}[] = [
+    {key: 'preach', emoji: '📢'},
+    {key: 'tentmaking', emoji: '🏕️'},
+    {key: 'disciple', emoji: '👥'},
+    {key: 'rest', emoji: '😴'},
+    {key: 'write_letter', emoji: '✉️'},
+  ];
+  
+  actionData.forEach((data, idx) => {
+    const action = ACTIONS[data.key];
+    const cost = formatEffect(action.cost, true);
+    const effect = formatEffect(action.effect);
+    console.log(`║  [${idx + 1}] ${data.emoji} ${action.nameChinese.padEnd(4)}  消耗:${cost.padEnd(12)}  收益:${effect}`);
   });
   console.log('║  [q] 退出游戏');
+  console.log('╚═══════════════════════════════════════════════════════╝');
+}
+
+function displayCompanionTaskOptions(): void {
+  console.log('\n╔═══════════════════════════════════════════════════════╗');
+  console.log('║  👥 同工任务选择 (消耗 → 收益)                      ║');
   console.log('╠═══════════════════════════════════════════════════════╣');
   
-  if (lastAction) {
-    console.log(`║  📝 上次行动: ${lastAction}`);
-  }
+  const taskData: {key: CompanionTaskType, emoji: string}[] = [
+    {key: 'teach', emoji: '📖'},
+    {key: 'visitation', emoji: '🚶'},
+    {key: 'logistics', emoji: '📦'},
+    {key: 'assist_writing', emoji: '✍️'},
+    {key: 'rest', emoji: '😴'},
+  ];
   
-  if (companionResults && companionResults.length > 0) {
-    console.log('║  👥 同工行动:');
+  taskData.forEach((data, idx) => {
+    const task = COMPANION_TASKS[data.key];
+    const cost = `体-${task.staminaCost}`;
+    const effect = formatEffect(task.effect);
+    console.log(`║  [${idx + 1}] ${data.emoji} ${task.nameChinese.padEnd(2)}   消耗:${cost.padEnd(8)}  收益:${effect}`);
+  });
+  console.log('║  [0] 跳过（默认休息)');
+  console.log('╚═══════════════════════════════════════════════════════╝');
+}
+
+function displayResult(lastAction: string, companionResults: string[]): void {
+  console.log('\n╔═══════════════════════════════════════════════════════╗');
+  console.log('║  📝 执行结果:                                         ║');
+  console.log('╠═══════════════════════════════════════════════════════╣');
+  console.log(`║  👤 保罗: ${lastAction}`);
+  if (companionResults.length > 0) {
+    console.log('║  👥 同工:');
     companionResults.forEach(r => {
-      const trimmed = r.replace('✅ ', '').replace('❌ ', '');
-      console.log(`║     ${trimmed}`);
+      const trimmed = r.replace('✅ ', '').replace('❌ ', '').replace('✉️ ', '').substring(0, 40);
+      console.log(`║      ${trimmed}`);
     });
   }
-  
   console.log('╚═══════════════════════════════════════════════════════╝');
 }
 
@@ -209,29 +245,15 @@ async function assignCompanionTasks(game: GameEngine, question: (p: string) => P
   const activeCompanions = game.player.companions.filter((c: Companion) => c.isActive && c.morale >= 20);
   
   if (activeCompanions.length > 0) {
-    console.log('\n╔═══════════════════════════════════════════════════════╗');
-    console.log('║  👥 为同工分配任务 (消耗 → 收益):                    ║');
-    console.log('╠═══════════════════════════════════════════════════════╣');
-    
-    const taskKeys: CompanionTaskType[] = ['teach', 'visitation', 'logistics', 'assist_writing', 'rest'];
-    const taskEmojis = ['📖', '🚶', '📦', '✍️', '😴'];
-    
-    taskKeys.forEach((task, idx) => {
-      const taskInfo = COMPANION_TASKS[task];
-      const cost = `体-${taskInfo.staminaCost}`;
-      const effect = formatEffect(taskInfo.effect);
-      console.log(`║  [${idx + 1}]${taskEmojis[idx]}${taskInfo.nameChinese} 消耗:${cost} 收益:${effect}`);
-    });
-    console.log('║  [0] 跳过（默认休息)');
-    console.log('╚═══════════════════════════════════════════════════════╝');
+    displayCompanionTaskOptions();
     
     for (const companion of activeCompanions) {
       let validChoice = false;
       while (!validChoice) {
-        const choice = await question(`\n👤 为 ${companion.nameChinese}[${companion.specialtyName}] 选择任务 > `);
+        const choice = await question(`\n👤 为 ${companion.nameChinese}[${companion.specialtyName}] 选择 > `);
         if (choice.trim() === '0' || choice.trim() === '') {
           companionActions.set(companion.id, 'rest');
-          console.log(`   → ${companion.nameChinese} 选择休息 😴`);
+          console.log(`   ✓ ${companion.nameChinese} → 休息 😴`);
           validChoice = true;
         } else {
           const taskMap: Record<string, CompanionTaskType> = {
@@ -245,7 +267,8 @@ async function assignCompanionTasks(game: GameEngine, question: (p: string) => P
             const task = taskMap[choice.trim()];
             const taskInfo = COMPANION_TASKS[task];
             companionActions.set(companion.id, task);
-            console.log(`   → ${companion.nameChinese} 选择 ${taskInfo.nameChinese} ${taskEmojis[taskKeys.indexOf(task)]}`);
+            const emoji = ['📖', '🚶', '📦', '✍️', '😴'][parseInt(choice.trim()) - 1];
+            console.log(`   ✓ ${companion.nameChinese} → ${taskInfo.nameChinese} ${emoji}`);
             validChoice = true;
           } else {
             console.log('   ❌ 无效选择，请输入 0-5');
