@@ -163,25 +163,86 @@ class Team {
 
   // ==================== 状态显示 ====================
 
-  getStatus(): string {
-    let status = "┌─────────────────────────────────────────┐\n";
-    status += "│  团队状态                                │\n";
-    status += "├─────────────────────────────────────────┤\n";
+  getStatus(
+    prevResources?: {
+      faith: number;
+      provision: number;
+      stability: number;
+      persecution: number;
+      reputation: number;
+      disciples: number;
+      churches: number;
+      leaderStamina: number;
+    },
+    resourceChanges?: {
+      provider: string;
+      emoji: string;
+      changes: { resource: string; value: number; isCost: boolean }[];
+    }[],
+  ): string {
+    const formatChange = (current: number, prev: number, emojis: string[]): string => {
+      const diff = current - prev;
+      if (diff === 0) return "";
+      const emojiStr = emojis.length > 0 ? " " + emojis.join("") : "";
+      if (diff > 0) return ` ↑${diff}${emojiStr}`;
+      return ` ↓${Math.abs(diff)}${emojiStr}`;
+    };
+
+    const getResourceEmojis = (resourceKey: string): string[] => {
+      if (!resourceChanges) return [];
+      const emojis: string[] = [];
+      for (const rc of resourceChanges) {
+        for (const change of rc.changes) {
+          const keyMap: Record<string, string> = {
+            stamina: "stamina",
+            faith: "faith",
+            provision: "provision",
+            stability: "stability",
+            persecution: "persecution",
+            reputation: "reputation",
+            disciples: "disciples",
+            churches: "churches",
+          };
+          if (keyMap[change.resource] === resourceKey) {
+            emojis.push(rc.emoji);
+          }
+        }
+      }
+      return emojis;
+    };
+
+    let status = "╔═══════════════════════════════════════════════════════╗\n";
+    status += "║  🎯 行动果效                                      ║\n";
+    status += "╠═══════════════════════════════════════════════════════╣\n";
 
     if (this.leader) {
-      status += `│  领导: ${this.leader.nameChinese}[${this.leader.specialtyName}]\n`;
-      status += `│    体力: ${this.leader.stamina}/${this.leader.maxStamina}  士气: ${this.leader.morale}%\n`;
-      status += "├─────────────────────────────────────────┤\n";
+      const staminaEmojis = getResourceEmojis("stamina");
+      const staminaChange = prevResources ? formatChange(this.leader.stamina, prevResources.leaderStamina, staminaEmojis) : "";
+      status += `║  保罗: ${this.leader.nameChinese}[${this.leader.specialtyName}] 💪${this.leader.stamina}/${this.leader.maxStamina}${staminaChange}  😊${this.leader.morale}%\n`;
     }
 
-    status += `│  信心 (Faith):         ${this.faith.toString().padStart(3)}/200  │\n`;
-    status += `│  声望 (Reputation):    ${this.reputation.toString().padStart(3)}/200  │\n`;
-    status += `│  教会 (Churches):      ${this.churches.toString().padStart(3)}      │\n`;
-    status += `│  门徒 (Disciples):     ${this.disciples.toString().padStart(3)}      │\n`;
-    status += `│  物资 (Provision):     ${this.provision.toString().padStart(3)}/150  │\n`;
-    status += `│  稳定 (Stability):     ${this.stability.toString().padStart(3)}/100  │\n`;
-    status += `│  逼迫 (Persecution):   ${this.persecution.toString().padStart(3)}/100  │\n`;
-    status += "└─────────────────────────────────────────┘";
+    // 显示其他同工
+    if (this.members.length > 0) {
+      for (const member of this.members) {
+        status += `║  ${member.nameChinese}[${member.specialtyName}] 💪${member.stamina}/${member.maxStamina}  😊${member.morale}%\n`;
+      }
+    }
+
+    status += "╠═══════════════════════════════════════════════════════╣\n";
+    status += "║  团队:\n";
+    
+    if (prevResources && resourceChanges) {
+      status += `║  🍞 物资    ${this.provision.toString().padStart(3)}/150${formatChange(this.provision, prevResources.provision, getResourceEmojis("provision"))}   ⛪ 稳定     ${this.stability.toString().padStart(3)}/100${formatChange(this.stability, prevResources.stability, getResourceEmojis("stability"))}\n`;
+      status += `║  🔥 逼迫    ${this.persecution.toString().padStart(3)}/100${formatChange(this.persecution, prevResources.persecution, getResourceEmojis("persecution"))}   ⭐ 名声     ${this.reputation.toString().padStart(3)}/200${formatChange(this.reputation, prevResources.reputation, getResourceEmojis("reputation"))}\n`;
+      status += `║  ✝️ 信心    ${this.faith.toString().padStart(3)}/200${formatChange(this.faith, prevResources.faith, getResourceEmojis("faith"))}   👥 门徒     ${this.disciples.toString().padStart(3)}${formatChange(this.disciples, prevResources.disciples, getResourceEmojis("disciples"))}\n`;
+      status += `║  ⛪ 教会      ${this.churches.toString().padStart(3)}${formatChange(this.churches, prevResources.churches, getResourceEmojis("churches"))}\n`;
+    } else {
+      status += `║  🍞 物资    ${this.provision.toString().padStart(3)}/150   ⛪ 稳定     ${this.stability.toString().padStart(3)}/100\n`;
+      status += `║  🔥 逼迫    ${this.persecution.toString().padStart(3)}/100   ⭐ 名声     ${this.reputation.toString().padStart(3)}/200\n`;
+      status += `║  ✝️ 信心    ${this.faith.toString().padStart(3)}/200   👥 门徒     ${this.disciples.toString().padStart(3)}\n`;
+      status += `║  ⛪ 教会      ${this.churches.toString().padStart(3)}\n`;
+    }
+    status += "╚═══════════════════════════════════════════════════════╝";
 
     return status;
   }

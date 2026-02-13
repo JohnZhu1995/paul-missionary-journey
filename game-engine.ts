@@ -1,4 +1,4 @@
-﻿// ============================================
+// ============================================
 // 保罗传道旅程 - 游戏引擎模块
 // 职责：核心游戏逻辑、状态管理和游戏流程控制
 // ============================================
@@ -273,6 +273,24 @@ class GameEngine {
       return `资源不足，无法执行「${action.name}」`;
     }
 
+    // 记录行动前的资源状态
+    const prevResources = {
+      faith: this.team.faith,
+      provision: this.team.provision,
+      stability: this.team.stability,
+      persecution: this.team.persecution,
+      reputation: this.team.reputation,
+      disciples: this.team.disciples,
+      churches: this.team.churches,
+      leaderStamina: this.team.leader?.stamina || 0,
+    };
+
+    // 记录各成员的体力变化来源
+    const staminaChanges: Map<string, { name: string; change: number }[]> = new Map();
+    if (this.team.leader) {
+      staminaChanges.set("leader", [{ name: this.team.leader.nameChinese, change: 0 }]);
+    }
+
     // 记录忠心点数
     if (actionType === "preach" && this.team.persecution > 70) {
       this.totalFaithfulnessPoints += 10;
@@ -280,21 +298,65 @@ class GameEngine {
 
     const prevStability = this.team.stability;
 
+    // 收集各成员带来的资源变化
+    const resourceChanges: {
+      provider: string;
+      emoji: string;
+      changes: { resource: string; value: number; isCost: boolean }[];
+    }[] = [];
+
+    // 保罗行动的变化
+    const paulChanges: { resource: string; value: number; isCost: boolean }[] = [];
+    if (action.cost.stamina) paulChanges.push({ resource: "stamina", value: action.cost.stamina, isCost: true });
+    if (action.cost.faith) paulChanges.push({ resource: "faith", value: action.cost.faith, isCost: true });
+    if (action.cost.provision) paulChanges.push({ resource: "provision", value: action.cost.provision, isCost: true });
+    for (const [key, val] of Object.entries(action.effect)) {
+      if (val && val > 0) paulChanges.push({ resource: key, value: val, isCost: false });
+    }
+    resourceChanges.push({
+      provider: this.team.leader?.nameChinese || "保罗",
+      emoji: "👤",
+      changes: paulChanges,
+    });
+
     // 处理同工任务
     let companionResults: string[] = [];
     if (companionActions) {
       for (const [companionId, taskType] of companionActions) {
         const companion = this.companions.find((c) => c.id === companionId);
         if (companion) {
+          const taskInfo = COMPANION_TASKS[taskType];
+          const companionChange: { resource: string; value: number; isCost: boolean }[] = [];
+          companionChange.push({ resource: "stamina", value: taskInfo.staminaCost, isCost: true });
+          for (const [key, val] of Object.entries(taskInfo.effect)) {
+            if (val && val > 0) companionChange.push({ resource: key, value: val, isCost: false });
+          }
+
           const result = companion.assignTask(taskType);
           if (result.success) {
             this.team.applyEffects(result.effect);
             companionResults.push(`✅ ${result.message}`);
+            resourceChanges.push({
+              provider: companion.nameChinese,
+              emoji: "👥",
+              changes: companionChange,
+            });
           } else {
             companionResults.push(`❌ ${result.message}`);
           }
         }
       }
+    }
+
+    // 扣除保罗行动的消耗
+    if (action.cost.stamina && this.team.leader) {
+      this.team.leader.stamina -= action.cost.stamina;
+    }
+    if (action.cost.faith) {
+      this.team.faith -= action.cost.faith;
+    }
+    if (action.cost.provision) {
+      this.team.provision -= action.cost.provision;
     }
 
     // 应用保罗的行动效果
@@ -328,8 +390,8 @@ class GameEngine {
       this.totalStabilityLost += stabilityLoss;
     }
 
-    // 恢复同工体力
-    this.companions.forEach((c) => c.recoverStamina());
+    // 恢复同工体力（已注释：改为玩家主动选择休息任务）
+    // this.companions.forEach((c) => c.recoverStamina());
 
     if (this.currentCity && !this.currentCity.hasMoreRounds()) {
       this.moveToNextCity();
@@ -338,24 +400,53 @@ class GameEngine {
     // 检查游戏结束条件
     this.checkGameEnd();
 
-    return this.generateActionResult(action, companionResults);
+    return this.generateActionResult(action, companionResults, prevResources, resourceChanges);
+  }
+
+  private generateActionResult(
+    action: (typeof ACTIONS)["preach"],
+    companionResults: string[],
+    prevResources: {
+      faith: number;
+      provision: number;
+      stability: number;
+      persecution: number;
+      reputation: number;
+      disciples: number;
+      churches: number;
+      leaderStamina: number;
+    },
+    resourceChanges: {
+      provider: string;
+      emoji: string;
+      changes: { resource: string; value: number; isCost: boolean }[];
+    }[],
+  ): string {
+    const leaderName = this.team.leader?.nameChinese || "保罗";
+    let result = `\n✅ ${leaderName}执行「${action.nameChinese}」`;
+    if (companionResults.length > 0) {
+      result += "\n" + companionResults.join("\n");
+    }
+    result += `\n${this.team.getStatus(prevResources, resourceChanges)}`;
+    if (this.currentCity) {
+      result += `\n📍 当前位置: ${this.currentCity.getRoundInfo()}`;
+    }
+    return result;
   }
 
   private canPerformAction(action: (typeof ACTIONS)["preach"]): boolean {
-    const effect = action.effect;
+    const cost = action.cost;
     if (
-      effect.stamina &&
-      effect.stamina < 0 &&
+      cost.stamina &&
       this.team.leader &&
-      this.team.leader.stamina < Math.abs(effect.stamina)
+      this.team.leader.stamina < cost.stamina
     ) {
       return false;
     }
-    if (
-      effect.provision &&
-      effect.provision < 0 &&
-      this.team.provision < Math.abs(effect.provision)
-    ) {
+    if (cost.faith && this.team.faith < cost.faith) {
+      return false;
+    }
+    if (cost.provision && this.team.provision < cost.provision) {
       return false;
     }
     return true;
@@ -478,21 +569,6 @@ class GameEngine {
         );
       }
     }
-  }
-
-  private generateActionResult(
-    action: (typeof ACTIONS)["preach"],
-    companionResults: string[],
-  ): string {
-    let result = `\n✅ 执行「${action.name}」`;
-    if (companionResults.length > 0) {
-      result += "\n" + companionResults.join("\n");
-    }
-    result += `\n${this.team.getStatus()}`;
-    if (this.currentCity) {
-      result += `\n📍 当前位置: ${this.currentCity.getRoundInfo()}`;
-    }
-    return result;
   }
 
   writeLetter(): { success: boolean; message: string } {

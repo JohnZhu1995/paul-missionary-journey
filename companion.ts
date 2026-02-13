@@ -99,7 +99,7 @@ class Companion {
     const taskInfo = COMPANION_TASKS[task];
     
     if (this.stamina < taskInfo.staminaCost) {
-      return { success: false, message: `${this.nameChinese}体力不足，无法执行${taskInfo.nameChinese}任务`, effect: {} };
+      return { success: false, message: `${this.nameChinese}体力不足，无法执行「${taskInfo.nameChinese}」`, effect: {} };
     }
     
     this.currentTask = task;
@@ -119,7 +119,7 @@ class Companion {
     
     return { 
       success: true, 
-      message: `${this.nameChinese}成功执行${taskInfo.nameChinese}任务`, 
+      message: `${this.nameChinese}执行「${taskInfo.nameChinese}」`, 
       effect: finalEffect 
     };
   }

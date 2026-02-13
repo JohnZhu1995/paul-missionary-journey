@@ -52,7 +52,7 @@ async function runInteractiveMode(): Promise<void> {
     });
   };
 
-  console.clear?.();
+  console.log("\n".repeat(5));
   console.log("\n🎮 欢迎来到《保罗旅行布道》v2.0！");
   console.log("\n🆕 新特性：");
   console.log("- 👥 同工系统：招募同工，分配任务，团队协作");
@@ -68,7 +68,8 @@ async function runInteractiveMode(): Promise<void> {
   let companionTaskSummary = "";
 
   while (!game.isGameOver) {
-    console.clear?.();
+    // 清屏：使用多行换行替代 console.clear（兼容性更好）
+    console.log("\n".repeat(5));
 
     // 显示状态面板（带选项提示）
     displayStatusWithAction(game, currentAction, companionTaskSummary);
@@ -119,10 +120,6 @@ async function runInteractiveMode(): Promise<void> {
     // 执行行动
     const result = game.handleAction(actionType, companionActions);
 
-    // 清除选项，显示结果
-    console.clear?.();
-    displayStatusWithAction(game, currentAction, companionTaskSummary);
-
     console.log("\n" + result);
 
     const eventResult = game.triggerEvent();
@@ -143,7 +140,7 @@ async function runInteractiveMode(): Promise<void> {
     companionTaskSummary = "";
   }
 
-  console.clear?.();
+  console.log("\n".repeat(5));
   console.log(game.getGameStateDisplay());
 
   if (game.isVictory) {
@@ -186,11 +183,12 @@ function displayStatusWithAction(
   const status = team.getTeamViewStatus();
 
   console.log("\n╔═══════════════════════════════════════════════════════╗");
+  console.log("║  📊 状态概览                                      ║");
+  console.log("╠═══════════════════════════════════════════════════════╗");
 
-  // 第一行：城市信息 + 回合 + 当前行动
-  const actionText = currentAction ? ` → ${currentAction}` : "";
+  // 第一行：城市信息 + 回合
   console.log(
-    `║  📍 ${(city?.nameChinese || "").padEnd(8)}       │  ${String(city?.currentTurn || 1).padStart(2)}/${city?.maxTurns || 5}回合${actionText.padStart(20)}║`,
+    `║  📍 ${(city?.nameChinese || "").padEnd(8)}       │  ${String(city?.currentTurn || 1).padStart(2)}/${city?.maxTurns || 5}回合${" ".repeat(20)}║`,
   );
   console.log("╠═══════════════════════════════════════════════════════╣");
   console.log("║  团队状态:");
