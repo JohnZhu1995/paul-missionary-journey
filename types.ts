@@ -15,11 +15,33 @@ type ResourceChange = {
   morale?: number;
 };
 
-type ActionType = 'preach' | 'tentmaking' | 'disciple' | 'rest' | 'write_letter';
+type ActionType =
+  | "preach"
+  | "tentmaking"
+  | "disciple"
+  | "rest"
+  | "write_letter";
 
-type CompanionTaskType = 'preach' | 'tentmaking' | 'heal' | 'teach' | 'defend' | 'visitation' | 'logistics' | 'assist_writing' | 'rest';
+type CompanionTaskType =
+  | "preach"
+  | "tentmaking"
+  | "heal"
+  | "teach"
+  | "defend"
+  | "visitation"
+  | "logistics"
+  | "assist_writing"
+  | "rest";
 
-type SpecialtyType = 'preaching' | 'crafting' | 'healing' | 'teaching' | 'defense' | 'counselor' | 'resilient' | 'scribe';
+type SpecialtyType =
+  | "preaching"
+  | "crafting"
+  | "healing"
+  | "teaching"
+  | "defense"
+  | "counselor"
+  | "resilient"
+  | "scribe";
 
 interface Action {
   id: ActionType;
@@ -41,7 +63,7 @@ interface LetterEffect {
 interface GameEvent {
   id: string;
   name: string;
-  type: 'event' | 'decision';
+  type: "event" | "decision";
   title?: string;
   description: string;
   text?: string;
@@ -56,11 +78,11 @@ interface GameEvent {
 interface DecisionEvent {
   id: string;
   name: string;
-  type: 'decision';
+  type: "decision";
   title?: string;
   description: string;
   text?: string;
-  condition: (player: Player, city: City) => boolean;
+  condition: (team: any, city: City) => boolean;
   choices: {
     label: string;
     description: string;
@@ -70,30 +92,7 @@ interface DecisionEvent {
   }[];
 }
 
-// 前置声明，避免循环依赖
-interface Player {
-  faith: number;
-  stamina: number;
-  maxStamina: number;
-  reputation: number;
-  churches: number;
-  disciples: number;
-  provision: number;
-  stability: number;
-  persecution: number;
-  morale: number;
-  companions: Companion[];
-  visitedCities: string[];
-  currentCity: string | null;
-  addCompanion(companion: Companion): void;
-  removeCompanion(companionId: string): boolean;
-  getActiveCompanions(): Companion[];
-  consumeResources(cost: ResourceChange): boolean;
-  applyEffects(effect: ResourceChange): void;
-  rest(): void;
-  isAlive(): boolean;
-  getStatus(): string;
-}
+// Team接口标准由team.ts类实现，不再单独定义接口
 
 interface City {
   id: string;
@@ -133,7 +132,11 @@ interface Companion {
   currentTask: CompanionTaskType | null;
   applySpecialtyEffect(action: ActionType): ResourceChange;
   getEfficiency(): number;
-  assignTask(task: CompanionTaskType): { success: boolean; message: string; effect: ResourceChange };
+  assignTask(task: CompanionTaskType): {
+    success: boolean;
+    message: string;
+    effect: ResourceChange;
+  };
   recoverStamina(): void;
   getStatus(): string;
 }
@@ -147,7 +150,6 @@ export {
   LetterEffect,
   GameEvent,
   DecisionEvent,
-  Player,
   City,
   Companion,
 };

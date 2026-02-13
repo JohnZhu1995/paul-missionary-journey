@@ -28,7 +28,6 @@ import {
 } from "./events.js";
 import { Companion } from "./companion.js";
 import { LetterSystem } from "./letter.js";
-import { Player } from "./player.js";
 import { City } from "./city.js";
 import { GameEngine } from "./game-engine.js";
 
@@ -182,12 +181,12 @@ function displayStatusWithAction(
   currentAction: string = "",
   companionTasks: string = "",
 ): void {
-  const p = game.player;
+  const team = game.team;
   const city = game.currentCity;
-  const status = p.getTeamViewStatus();
-  
+  const status = team.getTeamViewStatus();
+
   console.log("\n╔═══════════════════════════════════════════════════════╗");
-  
+
   // 第一行：城市信息 + 回合 + 当前行动
   const actionText = currentAction ? ` → ${currentAction}` : "";
   console.log(
@@ -195,17 +194,31 @@ function displayStatusWithAction(
   );
   console.log("╠═══════════════════════════════════════════════════════╣");
   console.log("║  团队状态:");
-  console.log(`║  🍞 物资 ${status.provision.padStart(10)}   ⛪ 稳定 ${status.stability.padStart(10)}`);
-  console.log(`║  🔥 逼迫 ${status.persecution.padStart(10)}   ⭐ 名声 ${status.reputation.padStart(10)}`);
+  console.log(
+    `║  🍞 物资 ${status.provision.padStart(10)}   ⛪ 稳定 ${status.stability.padStart(10)}`,
+  );
+  console.log(
+    `║  🔥 逼迫 ${status.persecution.padStart(10)}   ⭐ 名声 ${status.reputation.padStart(10)}`,
+  );
 
-  if (game.companions.length > 0) {
+  if (team.leader || (team.members && team.members.length > 0)) {
     console.log("╠═══════════════════════════════════════════════════════╣");
-    console.log("║  同工:");
-    game.companions.forEach((c) => {
-      if (c.isActive) {
-        console.log(`║  ${c.getTeamViewStatus()}`);
-      }
-    });
+    console.log("║  团队:");
+    
+    // 显示保罗（leader）
+    if (team.leader) {
+      const leaderStatus = `${team.leader.nameChinese}[${team.leader.specialtyName}] 💪${team.leader.stamina}  😊${team.leader.morale}%`;
+      console.log(`║  保罗: ${leaderStatus}`);
+    }
+    
+    // 显示其他同工
+    if (team.members && team.members.length > 0) {
+      team.members.forEach((c) => {
+        if (c.isActive) {
+          console.log(`║  ${c.getTeamViewStatus()}`);
+        }
+      });
+    }
 
     if (companionTasks) {
       console.log("╠═══════════════════════════════════════════════════════╣");
@@ -270,7 +283,7 @@ async function assignCompanionTasks(
   question: (p: string) => Promise<string>,
 ): Promise<Map<string, CompanionTaskType>> {
   const companionActions = new Map<string, CompanionTaskType>();
-  const activeCompanions = game.player.companions.filter(
+  const activeCompanions = game.team.members.filter(
     (c: Companion) => c.isActive && c.morale >= 20,
   );
 
@@ -383,7 +396,6 @@ export {
   // 类
   Companion,
   LetterSystem,
-  Player,
   City,
   GameEngine,
 

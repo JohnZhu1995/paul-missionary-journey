@@ -3,7 +3,8 @@
 // 职责：管理书信的撰写、收集和效果应用
 // ============================================
 
-import { ResourceChange, LetterEffect, Player } from './types.js';
+import { ResourceChange, LetterEffect } from "./types.js";
+import { Team } from "./team.js";
 
 class LetterSystem {
   epistleCollection: Map<string, boolean>;
@@ -18,92 +19,101 @@ class LetterSystem {
   }
 
   initializeEpistles(): void {
-    this.cityLetterEffects.set('Antioch', [{
-      cityId: 'Antioch',
-      effect: { faith: 20, reputation: 10, stability: 15 },
-      description: 'Epistle to Antioch'
-    }]);
-    
-    this.cityLetterEffects.set('Philippi', [{
-      cityId: 'Philippi',
-      effect: { faith: 25, reputation: 15, disciples: 2, stability: 10 },
-      description: 'Epistle to Philippians'
-    }]);
-    
-    this.cityLetterEffects.set('Ephesus', [{
-      cityId: 'Ephesus',
-      effect: { faith: 30, reputation: 20, churches: 1, stability: 20 },
-      description: 'Epistle to Ephesians'
-    }]);
+    this.cityLetterEffects.set("Antioch", [
+      {
+        cityId: "Antioch",
+        effect: { faith: 20, reputation: 10, stability: 15 },
+        description: "Epistle to Antioch",
+      },
+    ]);
+
+    this.cityLetterEffects.set("Philippi", [
+      {
+        cityId: "Philippi",
+        effect: { faith: 25, reputation: 15, disciples: 2, stability: 10 },
+        description: "Epistle to Philippians",
+      },
+    ]);
+
+    this.cityLetterEffects.set("Ephesus", [
+      {
+        cityId: "Ephesus",
+        effect: { faith: 30, reputation: 20, churches: 1, stability: 20 },
+        description: "Epistle to Ephesians",
+      },
+    ]);
   }
 
-  canWriteLetter(cityId: string, player: Player): boolean {
+  canWriteLetter(cityId: string, team: Team): boolean {
     if (this.epistleCollection.get(cityId)) return false;
-    if (player.disciples < 3) return false;
-    if (player.faith < 30) return false;
+    if (team.disciples < 3) return false;
+    if (team.faith < 30) return false;
     return true;
   }
 
-  writeLetter(cityId: string, cityName: string): { success: boolean; message: string; effect?: ResourceChange } {
+  writeLetter(
+    cityId: string,
+    cityName: string,
+  ): { success: boolean; message: string; effect?: ResourceChange } {
     if (this.epistleCollection.get(cityId)) {
       return { success: false, message: `已经在${cityName}写过书信了` };
     }
-    
+
     this.epistleCollection.set(cityId, true);
     this.letterScore += 50;
-    
+
     const effects = this.cityLetterEffects.get(cityId);
     const effect = effects ? effects[0].effect : { faith: 15, reputation: 10 };
-    
+
     return {
       success: true,
       message: `成功撰写了致${cityName}教会的书信！`,
-      effect
+      effect,
     };
   }
 
   getCollectionStatus(): string {
     const letters: { city: string; collected: boolean }[] = [];
     let collected = 0;
-    
+
     for (const [cityId, isCollected] of this.epistleCollection) {
       letters.push({ city: cityId, collected: isCollected });
       if (isCollected) collected++;
     }
-    
+
     const possibleLetters = [
-      { cityId: 'Antioch', city: '安提阿' },
-      { cityId: 'Philippi', city: '腓立比' },
-      { cityId: 'Ephesus', city: '以弗所' },
+      { cityId: "Antioch", city: "安提阿" },
+      { cityId: "Philippi", city: "腓立比" },
+      { cityId: "Ephesus", city: "以弗所" },
     ];
-    
+
     for (const letter of possibleLetters) {
       if (!this.epistleCollection.has(letter.cityId)) {
         letters.push({ city: letter.city, collected: false });
       }
     }
-    
-    let output = '\n📚 书信收集进度:\n';
+
+    let output = "\n📚 书信收集进度:\n";
     output += `   已收集: ${collected}/${possibleLetters.length}\n`;
     for (const letter of letters) {
-      const symbol = letter.collected ? '✅' : '⬜';
+      const symbol = letter.collected ? "✅" : "⬜";
       output += `   ${symbol} ${letter.city}\n`;
     }
-    
+
     return output;
   }
 
   // 紧凑单行格式
   getCompactCollectionStatus(): string {
     const possibleLetters = [
-      { cityId: 'Antioch', city: '安' },
-      { cityId: 'Philippi', city: '腓' },
-      { cityId: 'Ephesus', city: '以' },
+      { cityId: "Antioch", city: "安" },
+      { cityId: "Philippi", city: "腓" },
+      { cityId: "Ephesus", city: "以" },
     ];
-    
-    let letterBar = '';
+
+    let letterBar = "";
     let collected = 0;
-    
+
     for (const letter of possibleLetters) {
       const isCollected = this.epistleCollection.get(letter.cityId);
       if (isCollected) {
@@ -113,25 +123,25 @@ class LetterSystem {
         letterBar += `[○${letter.city}]`;
       }
     }
-    
+
     return `📚 书信: ${letterBar} (${collected}/${possibleLetters.length})`;
   }
-  
+
   // 超紧凑格式（仅显示进度条）
   getUltraCompactStatus(): string {
-    const possibleLetters = ['Antioch', 'Philippi', 'Ephesus'];
+    const possibleLetters = ["Antioch", "Philippi", "Ephesus"];
     let collected = 0;
-    let letterBar = '';
-    
+    let letterBar = "";
+
     for (const cityId of possibleLetters) {
       if (this.epistleCollection.get(cityId)) {
-        letterBar += '✓';
+        letterBar += "✓";
         collected++;
       } else {
-        letterBar += '○';
+        letterBar += "○";
       }
     }
-    
+
     return `📚 [${letterBar}] ${collected}/${possibleLetters.length}`;
   }
 
@@ -144,8 +154,8 @@ class LetterSystem {
   }
 
   isCompleteCollection(): boolean {
-    const cities = ['Antioch', 'Philippi', 'Ephesus'];
-    return cities.every(id => this.epistleCollection.get(id) === true);
+    const cities = ["Antioch", "Philippi", "Ephesus"];
+    return cities.every((id) => this.epistleCollection.get(id) === true);
   }
 }
 
