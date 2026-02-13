@@ -18,3 +18,14 @@ npm-debug.log*
 # Optional: Local development files
 .env.local
 .env.development.local
+
+# modules
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Package lock files
+package-lock.json
+yarn.lock

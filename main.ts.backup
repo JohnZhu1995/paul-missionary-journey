@@ -1,0 +1,1927 @@
+// ============================================
+// 保罗传道旅程 - TypeScript 游戏主文件
+// ============================================
+
+// ============================================
+// 1. 类型定义部分
+// ============================================
+
+type ResourceChange = {
+  faith?: number;
+  stamina?: number;
+  reputation?: number;
+  churches?: number;
+  disciples?: number;
+  provision?: number;
+  stability?: number;
+  persecution?: number;
+  morale?: number;
+};
+
+type ActionType = 'preach' | 'tentmaking' | 'disciple' | 'rest' | 'write_letter';
+
+type CompanionTaskType = 'preach' | 'tentmaking' | 'heal' | 'teach' | 'defend' | 'visitation' | 'logistics' | 'assist_writing' | 'rest';
+
+type SpecialtyType = 'preaching' | 'crafting' | 'healing' | 'teaching' | 'defense' | 'counselor' | 'resilient' | 'scribe';
+
+interface Action {
+  id: ActionType;
+  name: string;
+  nameChinese: string;
+  description: string;
+  cost: ResourceChange;
+  effect: ResourceChange;
+  minDisciples?: number;
+  requiresCompanion?: boolean;
+}
+
+interface LetterEffect {
+  cityId: string;
+  effect: ResourceChange;
+  description: string;
+}
+
+interface GameEvent {
+  id: string;
+  name: string;
+  type: 'event' | 'decision';
+  title?: string;
+  description: string;
+  text?: string;
+  effect: ResourceChange;
+  choices?: {
+    label: string;
+    description: string;
+    effect: ResourceChange;
+  }[];
+}
+
+interface DecisionEvent {
+  id: string;
+  name: string;
+  type: 'decision';
+  title?: string;
+  description: string;
+  text?: string;
+  condition: (player: Player, city: City) => boolean;
+  choices: {
+    label: string;
+    description: string;
+    text: string;
+    effect: ResourceChange;
+    consequence: string;
+  }[];
+}
+
+// ============================================
+// 2. 配置常量
+// ============================================
+
+const INITIAL_RESOURCES: ResourceChange = {
+  faith: 100,
+  stamina: 100,
+  reputation: 50,
+  churches: 0,
+  disciples: 0,
+  provision: 100,
+  stability: 50,
+  persecution: 0,
+  morale: 80,
+};
+
+const CITY_CONFIG: Record<string, { name: string; nameChinese: string; difficulty: number; rounds: number; basePersecutionRate: number; maxTurns: number; description: string }> = {
+  Antioch: {
+    name: 'Antioch',
+    nameChinese: '安提阿',
+    difficulty: 1,
+    rounds: 4,
+    basePersecutionRate: 5,
+    maxTurns: 4,
+    description: '保罗传道旅程的起点，信徒众多，教导基础稳固',
+  },
+  Philippi: {
+    name: 'Philippi',
+    nameChinese: '腓立比',
+    difficulty: 2,
+    rounds: 5,
+    basePersecutionRate: 8,
+    maxTurns: 5,
+    description: '马其顿的首城，紫色布料商人之地，需要面对挑战',
+  },
+  Ephesus: {
+    name: 'Ephesus',
+    nameChinese: '以弗所',
+    difficulty: 3,
+    rounds: 6,
+    basePersecutionRate: 12,
+    maxTurns: 6,
+    description: '亚细亚的大都会，亚底米神庙所在地，充满属灵争战',
+  },
+};
+
+const ACTIONS: Record<ActionType, Action> = {
+  preach: {
+    id: 'preach',
+    name: 'Preach Gospel',
+    nameChinese: '传扬福音',
+    description: '向城中居民宣讲福音，建立教会，增加信徒',
+    cost: { stamina: 20, faith: 5 },
+    effect: { reputation: 10, disciples: 2, persecution: 10 },
+  },
+  tentmaking: {
+    id: 'tentmaking',
+    name: 'Tentmaking',
+    nameChinese: '织帐棚',
+    description: '制作帐篷维生，恢复体力，维持基本生活',
+    cost: { stamina: 10 },
+    effect: { stamina: 15, faith: 5, provision: 10 },
+  },
+  disciple: {
+    id: 'disciple',
+    name: 'Train Disciples',
+    nameChinese: '训练门徒',
+    description: '深入教导信徒，建立坚固的门徒，增加教会根基',
+    cost: { stamina: 15, faith: 10 },
+    effect: { disciples: 3, reputation: 5, stability: 10 },
+    minDisciples: 2,
+  },
+  rest: {
+    id: 'rest',
+    name: 'Rest',
+    nameChinese: '安歇',
+    description: '休息祷告，恢复体力和信心',
+    cost: {},
+    effect: { stamina: 30, faith: 15 },
+  },
+  write_letter: {
+    id: 'write_letter',
+    name: 'Write Epistle',
+    nameChinese: '撰写书信',
+    description: '为建立的教会撰写书信，留下属灵遗产',
+    cost: { stamina: 25, faith: 20 },
+    effect: { reputation: 15 },
+    requiresCompanion: true,
+  },
+};
+
+const COMPANION_TASKS: Record<CompanionTaskType, { name: string; nameChinese: string; description: string; staminaCost: number; effect: ResourceChange }> = {
+  preach: {
+    name: 'Preach',
+    nameChinese: '宣讲',
+    description: '协助宣讲福音',
+    staminaCost: 15,
+    effect: { reputation: 5 },
+  },
+  tentmaking: {
+    name: 'Tentmaking',
+    nameChinese: '织帐',
+    description: '协助制作帐篷',
+    staminaCost: 10,
+    effect: { stamina: 10, provision: 5 },
+  },
+  heal: {
+    name: 'Heal',
+    nameChinese: '医治',
+    description: '为人医病',
+    staminaCost: 20,
+    effect: { reputation: 8, faith: 5 },
+  },
+  teach: {
+    name: 'Teach',
+    nameChinese: '教导',
+    description: '教导信徒',
+    staminaCost: 15,
+    effect: { disciples: 1, stability: 5 },
+  },
+  defend: {
+    name: 'Defend',
+    nameChinese: '辩护',
+    description: '为信仰辩护',
+    staminaCost: 15,
+    effect: { reputation: 3, persecution: -5 },
+  },
+  visitation: {
+    name: 'Visitation',
+    nameChinese: '探访',
+    description: '探访信徒，关心软弱的弟兄',
+    staminaCost: 12,
+    effect: { stability: 8, morale: 5 },
+  },
+  logistics: {
+    name: 'Logistics',
+    nameChinese: '后勤',
+    description: '管理物资和后勤',
+    staminaCost: 10,
+    effect: { provision: 10, stamina: 5 },
+  },
+  assist_writing: {
+    name: 'Assist Writing',
+    nameChinese: '协助写作',
+    description: '协助撰写书信',
+    staminaCost: 10,
+    effect: { reputation: 3 },
+  },
+  rest: {
+    name: 'Rest',
+    nameChinese: '休息',
+    description: '休息恢复体力',
+    staminaCost: 0,
+    effect: { stamina: 20, morale: 5 },
+  },
+};
+
+// ============================================
+// 3. Companion 类（同工系统）
+// ============================================
+
+class Companion {
+  id: string;
+  name: string;
+  nameChinese: string;
+  stamina: number;
+  maxStamina: number;
+  morale: number;
+  specialty: SpecialtyType;
+  specialtyName: string;
+  specialtyDescription: string;
+  isActive: boolean;
+  currentTask: CompanionTaskType | null;
+
+  constructor(
+    id: string,
+    name: string,
+    nameChinese: string,
+    specialty: SpecialtyType,
+    specialtyName: string,
+    specialtyDescription: string
+  ) {
+    this.id = id;
+    this.name = name;
+    this.nameChinese = nameChinese;
+    this.stamina = 100;
+    this.maxStamina = 100;
+    this.morale = 80;
+    this.specialty = specialty;
+    this.specialtyName = specialtyName;
+    this.specialtyDescription = specialtyDescription;
+    this.isActive = true;
+    this.currentTask = null;
+  }
+
+  applySpecialtyEffect(action: ActionType): ResourceChange {
+    let bonus: ResourceChange = {};
+    
+    switch (this.specialty) {
+      case 'preaching':
+        if (action === 'preach') {
+          bonus = { reputation: 5, disciples: 1 };
+        }
+        break;
+      case 'crafting':
+        if (action === 'tentmaking') {
+          bonus = { stamina: 10, provision: 5 };
+        }
+        break;
+      case 'healing':
+        if (action === 'preach' || action === 'disciple') {
+          bonus = { faith: 8, reputation: 3 };
+        }
+        break;
+      case 'teaching':
+        if (action === 'disciple') {
+          bonus = { disciples: 2, stability: 5 };
+        }
+        break;
+      case 'defense':
+        if (action === 'preach') {
+          bonus = { reputation: 4, persecution: -3 };
+        }
+        break;
+      case 'counselor':
+        if (action === 'disciple' || action === 'rest') {
+          bonus = { morale: 10, stability: 5 };
+        }
+        break;
+      case 'resilient':
+        if (action === 'preach') {
+          bonus = { stamina: 5, persecution: -5 };
+        }
+        break;
+      case 'scribe':
+        if (action === 'write_letter') {
+          bonus = { reputation: 10 };
+        }
+        break;
+    }
+    
+    return bonus;
+  }
+
+  getEfficiency(): number {
+    const staminaRatio = this.stamina / this.maxStamina;
+    const moraleFactor = this.morale / 100;
+    return (staminaRatio * 0.6 + moraleFactor * 0.4);
+  }
+
+  assignTask(task: CompanionTaskType): { success: boolean; message: string; effect: ResourceChange } {
+    const taskInfo = COMPANION_TASKS[task];
+    
+    if (this.stamina < taskInfo.staminaCost) {
+      return { success: false, message: `${this.nameChinese}体力不足，无法执行${taskInfo.nameChinese}任务`, effect: {} };
+    }
+    
+    this.currentTask = task;
+    this.stamina -= taskInfo.staminaCost;
+    
+    // 特殊专长加成
+    let bonusEffect: ResourceChange = {};
+    if (this.specialty === 'teaching' && task === 'teach') {
+      bonusEffect = { disciples: 1 };
+    } else if (this.specialty === 'scribe' && task === 'assist_writing') {
+      bonusEffect = { reputation: 5 };
+    } else if (this.specialty === 'counselor' && task === 'visitation') {
+      bonusEffect = { stability: 5, morale: 5 };
+    }
+    
+    const finalEffect = { ...taskInfo.effect, ...bonusEffect };
+    
+    return { 
+      success: true, 
+      message: `${this.nameChinese}成功执行${taskInfo.nameChinese}任务`, 
+      effect: finalEffect 
+    };
+  }
+
+  recoverStamina(): void {
+    this.stamina = Math.min(this.stamina + 20, this.maxStamina);
+  }
+
+  getStatus(): string {
+    const statusSymbol = this.isActive ? '✅' : '❌';
+    return `${statusSymbol} ${this.nameChinese}(${this.name}) - 体力: ${this.stamina}/${this.maxStamina}, 士气: ${this.morale}%, 专长: ${this.specialtyName}`;
+  }
+}
+
+// ============================================
+// 4. LetterSystem 类（书信系统）
+// ============================================
+
+class LetterSystem {
+  epistleCollection: Map<string, boolean>;
+  cityLetterEffects: Map<string, LetterEffect[]>;
+  letterScore: number;
+
+  constructor() {
+    this.epistleCollection = new Map();
+    this.cityLetterEffects = new Map();
+    this.letterScore = 0;
+    this.initializeEpistles();
+  }
+
+  initializeEpistles(): void {
+    // 加拉太书
+    this.cityLetterEffects.set('galatians', [{
+      cityId: 'galatia',
+      effect: { faith: 20, reputation: 10, stability: 15 },
+      description: '加拉太书：维护因信称义的真理'
+    }]);
+    
+    // 腓立比书
+    this.cityLetterEffects.set('philippians', [{
+      cityId: 'philippi',
+      effect: { faith: 25, reputation: 15, disciples: 2, stability: 10 },
+      description: '腓立比书：在患难中喜乐，追求基督里的合一'
+    }]);
+    
+    // 以弗所书
+    this.cityLetterEffects.set('ephesians', [{
+      cityId: 'ephesus',
+      effect: { faith: 30, reputation: 20, churches: 1, stability: 20 },
+      description: '以弗所书：教会的奥秘，信徒在基督里的地位'
+    }]);
+    
+    // 歌罗西书
+    this.cityLetterEffects.set('colossians', [{
+      cityId: 'colossae',
+      effect: { faith: 20, disciples: 2, stability: 15 },
+      description: '歌罗西书：基督的至高无上'
+    }]);
+    
+    // 腓利门书
+    this.cityLetterEffects.set('philemon', [{
+      cityId: 'colossae',
+      effect: { reputation: 15, faith: 10, stability: 5 },
+      description: '腓利门书：弟兄相爱，饶恕与接纳'
+    }]);
+  }
+
+  canWriteLetter(cityId: string, player: Player): boolean {
+    const cityConfig = CITY_CONFIG[cityId];
+    if (!cityConfig) return false;
+    
+    // 检查是否已经在该城市写过信
+    if (this.epistleCollection.get(cityId)) return false;
+    
+    // 检查门徒数量是否足够
+    if (player.disciples < 3) return false;
+    
+    // 检查信心值是否足够
+    if (player.faith < 30) return false;
+    
+    return true;
+  }
+
+  writeLetter(cityId: string, cityName: string): { success: boolean; message: string; effect?: ResourceChange } {
+    if (this.epistleCollection.get(cityId)) {
+      return { success: false, message: `已经在${cityName}写过书信了` };
+    }
+    
+    this.epistleCollection.set(cityId, true);
+    this.letterScore += 50;
+    
+    const effects = this.cityLetterEffects.get(cityId);
+    const effect = effects ? effects[0].effect : { faith: 15, reputation: 10 };
+    
+    return {
+      success: true,
+      message: `成功撰写了致${cityName}教会的书信！`,
+      effect
+    };
+  }
+
+  getCollectionStatus(): string {
+    const letters: { city: string; collected: boolean }[] = [];
+    let collected = 0;
+    
+    for (const [cityId, isCollected] of this.epistleCollection) {
+      const cityConfig = CITY_CONFIG[cityId];
+      const cityName = cityConfig ? cityConfig.nameChinese : cityId;
+      letters.push({ city: cityName, collected: isCollected });
+      if (isCollected) collected++;
+    }
+    
+    // 添加可以写的书信
+    const possibleLetters = [
+      { cityId: 'galatians', city: '加拉太' },
+      { cityId: 'philippians', city: '腓立比' },
+      { cityId: 'ephesians', city: '以弗所' },
+      { cityId: 'colossians', city: '歌罗西' },
+      { cityId: 'philemon', city: '腓利门' },
+    ];
+    
+    for (const letter of possibleLetters) {
+      if (!this.epistleCollection.has(letter.cityId)) {
+        letters.push({ city: letter.city, collected: false });
+      }
+    }
+    
+    let output = '\n📚 书信收集进度:\n';
+    output += `   已收集: ${collected}/${possibleLetters.length}\n`;
+    for (const letter of letters) {
+      const symbol = letter.collected ? '✅' : '⬜';
+      output += `   ${symbol} ${letter.city}\n`;
+    }
+    
+    return output;
+  }
+
+  applyLetterEffectsToCity(cityId: string): ResourceChange {
+    const effects = this.cityLetterEffects.get(cityId);
+    if (effects && this.epistleCollection.get(cityId)) {
+      return effects[0].effect;
+    }
+    return {};
+  }
+
+  isCompleteCollection(): boolean {
+    const possibleLetters = ['galatians', 'philippians', 'ephesians', 'colossians', 'philemon'];
+    return possibleLetters.every(id => this.epistleCollection.get(id) === true);
+  }
+}
+
+// ============================================
+// 5. Player 类
+// ============================================
+
+class Player {
+  faith: number;
+  stamina: number;
+  maxStamina: number;
+  reputation: number;
+  churches: number;
+  disciples: number;
+  provision: number;
+  stability: number;
+  persecution: number;
+  morale: number;
+  companions: Companion[];
+  visitedCities: string[];
+  currentCity: string | null;
+
+  constructor() {
+    this.faith = INITIAL_RESOURCES.faith || 100;
+    this.stamina = INITIAL_RESOURCES.stamina || 100;
+    this.maxStamina = 100;
+    this.reputation = INITIAL_RESOURCES.reputation || 50;
+    this.churches = INITIAL_RESOURCES.churches || 0;
+    this.disciples = INITIAL_RESOURCES.disciples || 0;
+    this.provision = INITIAL_RESOURCES.provision || 100;
+    this.stability = INITIAL_RESOURCES.stability || 50;
+    this.persecution = INITIAL_RESOURCES.persecution || 0;
+    this.morale = INITIAL_RESOURCES.morale || 80;
+    this.companions = [];
+    this.visitedCities = [];
+    this.currentCity = null;
+  }
+
+  addCompanion(companion: Companion): void {
+    this.companions.push(companion);
+  }
+
+  removeCompanion(companionId: string): boolean {
+    const index = this.companions.findIndex(c => c.id === companionId);
+    if (index !== -1) {
+      this.companions.splice(index, 1);
+      return true;
+    }
+    return false;
+  }
+
+  getActiveCompanions(): Companion[] {
+    return this.companions.filter(c => c.isActive);
+  }
+
+  consumeResources(cost: ResourceChange): boolean {
+    if (cost.faith && this.faith < cost.faith) return false;
+    if (cost.stamina && this.stamina < cost.stamina) return false;
+    if (cost.reputation && this.reputation < cost.reputation) return false;
+    if (cost.disciples && this.disciples < cost.disciples) return false;
+    if (cost.provision && this.provision < cost.provision) return false;
+
+    if (cost.faith) this.faith -= cost.faith;
+    if (cost.stamina) this.stamina -= cost.stamina;
+    if (cost.reputation) this.reputation -= cost.reputation;
+    if (cost.disciples) this.disciples -= cost.disciples;
+    if (cost.provision) this.provision -= cost.provision;
+
+    return true;
+  }
+
+  applyEffects(effect: ResourceChange): void {
+    if (effect.faith !== undefined) this.faith = Math.min(this.faith + effect.faith, 200);
+    if (effect.stamina !== undefined) this.stamina = Math.min(this.stamina + effect.stamina, this.maxStamina);
+    if (effect.reputation !== undefined) this.reputation = Math.min(this.reputation + effect.reputation, 200);
+    if (effect.churches !== undefined) this.churches += effect.churches;
+    if (effect.disciples !== undefined) this.disciples += effect.disciples;
+    if (effect.provision !== undefined) this.provision = Math.min(this.provision + effect.provision, 150);
+    if (effect.stability !== undefined) this.stability = Math.min(Math.max(this.stability + effect.stability, 0), 100);
+    if (effect.persecution !== undefined) this.persecution = Math.min(Math.max(this.persecution + effect.persecution, 0), 100);
+    if (effect.morale !== undefined) this.morale = Math.min(Math.max(this.morale + effect.morale, 0), 100);
+  }
+
+  rest(): void {
+    this.stamina = Math.min(this.stamina + 30, this.maxStamina);
+    this.faith = Math.min(this.faith + 15, 200);
+    
+    // 恢复同工体力
+    for (const companion of this.companions) {
+      companion.recoverStamina();
+    }
+  }
+
+  isAlive(): boolean {
+    return this.stamina > 0 && this.provision > 0;
+  }
+
+  getStatus(): string {
+    return `
+┌─────────────────────────────────────────┐
+│  保罗的状态                              │
+├─────────────────────────────────────────┤
+│  信心 (Faith):         ${this.faith.toString().padStart(3)}/200  │
+│  体力 (Stamina):       ${this.stamina.toString().padStart(3)}/100  │
+│  声望 (Reputation):    ${this.reputation.toString().padStart(3)}/200  │
+│  教会 (Churches):      ${this.churches.toString().padStart(3)}      │
+│  门徒 (Disciples):     ${this.disciples.toString().padStart(3)}      │
+│  物资 (Provision):     ${this.provision.toString().padStart(3)}/150  │
+│  稳定 (Stability):     ${this.stability.toString().padStart(3)}/100  │
+│  逼迫 (Persecution):   ${this.persecution.toString().padStart(3)}/100  │
+│  士气 (Morale):        ${this.morale.toString().padStart(3)}/100  │
+└─────────────────────────────────────────┘`;
+  }
+}
+
+// ============================================
+// 6. City 类
+// ============================================
+
+class City {
+  id: string;
+  name: string;
+  nameChinese: string;
+  difficulty: number;
+  maxTurns: number;
+  currentTurn: number;
+  description: string;
+  isCompleted: boolean;
+  letterWritten: boolean;
+  disciplesGained: number;
+  reputationGained: number;
+  basePersecutionRate: number;
+
+  constructor(cityId: string) {
+    const config = CITY_CONFIG[cityId];
+    if (!config) {
+      throw new Error(`Unknown city: ${cityId}`);
+    }
+    
+    this.id = cityId;
+    this.name = config.name;
+    this.nameChinese = config.nameChinese;
+    this.difficulty = config.difficulty;
+    this.maxTurns = config.maxTurns;
+    this.currentTurn = 0;
+    this.description = config.description;
+    this.isCompleted = false;
+    this.letterWritten = false;
+    this.disciplesGained = 0;
+    this.reputationGained = 0;
+    this.basePersecutionRate = config.basePersecutionRate;
+  }
+
+  advanceTurn(): boolean {
+    this.currentTurn++;
+    if (this.currentTurn >= this.maxTurns) {
+      this.isCompleted = true;
+      return true;
+    }
+    return false;
+  }
+
+  getRemainingTurns(): number {
+    return this.maxTurns - this.currentTurn;
+  }
+
+  getProgress(): number {
+    return (this.currentTurn / this.maxTurns) * 100;
+  }
+
+  hasMoreRounds(): boolean {
+    return this.currentTurn < this.maxTurns;
+  }
+
+  nextRound(): void {
+    this.currentTurn++;
+  }
+
+  addDisciples(count: number): void {
+    this.disciplesGained += count;
+  }
+
+  addReputation(amount: number): void {
+    this.reputationGained += amount;
+  }
+
+  getRoundInfo(): string {
+    return `${this.nameChinese}(${this.name}) - 第 ${this.currentTurn}/${this.maxTurns} 回合`;
+  }
+
+  getSummary(): string {
+    return `${this.nameChinese}(${this.name}) - 回合: ${this.currentTurn}/${this.maxTurns}, 获得门徒: ${this.disciplesGained}, 声望: +${this.reputationGained}`;
+  }
+}
+
+// ============================================
+// 7. 事件库
+// ============================================
+
+const ANTIOCH_EVENTS: Record<string, GameEvent | DecisionEvent> = {
+  christian_name: {
+    id: 'christian_name',
+    name: '基督徒的称呼',
+    type: 'event',
+    description: '门徒称为基督徒是从安提阿起首',
+    text: '在安提阿的教会中，信徒们被外人称为"基督徒"，这个名字成为了信仰的标志。',
+    effect: { reputation: 10, faith: 5 },
+  },
+  paul_barnabas_dispute: {
+    id: 'paul_barnabas_dispute',
+    name: '保罗与巴拿巴的争执',
+    type: 'decision',
+    description: '关于是否带马可同行的问题',
+    text: '巴拿巴想要带称呼马可的约翰同去，但保罗以为不带他同去为宜，因为马可从前在旁非利亚离开他们。',
+    choices: [
+      { label: '坚持己见', description: '保罗认为马可不够忠心，不能同行', effect: { morale: -20, stability: -5 } },
+      { label: '让步', description: '尊重巴拿巴的意见，允许马可同行', effect: { morale: 10, faith: 5 } },
+    ],
+  } as DecisionEvent,
+  synagogue_dispute: {
+    id: 'synagogue_dispute',
+    name: '会堂争论',
+    type: 'event',
+    description: '在会堂中与人辩论',
+    text: '每逢安息日，你们在会堂里与人辩论，劝化众人。',
+    effect: { reputation: 5, persecution: 10 },
+  },
+  barnabas_encouragement: {
+    id: 'barnabas_encouragement',
+    name: '巴拿巴的鼓励',
+    type: 'event',
+    description: '劝慰子巴拿巴的鼓励',
+    text: '巴拿巴用信心和鼓励坚固众人。',
+    effect: { morale: 15, faith: 10, provision: 10 },
+  },
+  gentile_inquiry: {
+    id: 'gentile_inquiry',
+    name: '外邦人的询问',
+    type: 'decision',
+    description: '外邦人来询问救恩之道',
+    text: '有几个外邦人来到，要听主的道。',
+    choices: [
+      { label: '热情接待', description: '向外邦人传讲福音', effect: { disciples: 2, reputation: 5 } },
+      { label: '谨慎对待', description: '先观察他们的动机', effect: { faith: 5 } },
+    ],
+  } as DecisionEvent,
+};
+
+const PHILIPPI_EVENTS: Record<string, GameEvent | DecisionEvent> = {
+  lydia_meeting: {
+    id: 'lydia_meeting',
+    name: '遇见吕底亚',
+    type: 'event',
+    description: '卖紫色布匹的妇人吕底亚信主',
+    text: '在河边祷告时，你们遇见卖紫色布匹的妇人吕底亚，她敞开心门接受了福音。',
+    effect: { disciples: 1, faith: 10, reputation: 5 },
+  },
+  sila_recruitment: {
+    id: 'sila_recruitment',
+    name: '西拉加入',
+    type: 'event',
+    description: '西拉成为同工',
+    text: '西拉加入了你们的宣教团队，他是一个坚韧的人。',
+    effect: { morale: 10, stability: 5 },
+  },
+  python_spirit: {
+    id: 'python_spirit',
+    name: '巫鬼的吵嚷',
+    type: 'decision',
+    description: '使女被巫鬼所附',
+    text: '有一个使女被巫鬼所附，她跟随你们喊叫说："这些人是至高神的仆人。"',
+    choices: [
+      { label: '赶出鬼去', description: '奉耶稣的名赶出污鬼', effect: { reputation: 10, persecution: 20 } },
+      { label: '暂时忍耐', description: '暂时忍耐几天，寻找合适时机', effect: { stamina: -10 } },
+    ],
+  } as DecisionEvent,
+  philippi_prison: {
+    id: 'philippi_prison',
+    name: '被囚与地震',
+    type: 'event',
+    description: '被打并被投入狱中',
+    text: '因赶鬼引起骚动，保罗和西拉被打并被投入狱中。半夜地大震动，牢门全开。',
+    effect: { persecution: -50, reputation: 20 },
+  },
+  midnight_praise: {
+    id: 'midnight_praise',
+    name: '半夜唱诗祷告',
+    type: 'event',
+    description: '在狱中祷告唱诗赞美神',
+    text: '约在半夜，保罗和西拉祷告唱诗赞美神，众囚犯也侧耳而听。',
+    effect: { stability: 20, reputation: 15, morale: 20 },
+  },
+};
+
+const EPHESUS_EVENTS: Record<string, GameEvent | DecisionEvent> = {
+  tyrannus_school: {
+    id: 'tyrannus_school',
+    name: '推喇奴学房',
+    type: 'event',
+    description: '在推喇奴学房辩论',
+    text: '你们进推喇奴学房辩论，如此有两年之久。',
+    effect: { disciples: 5, reputation: 10, stamina: -10 },
+  },
+  timothy_recruitment: {
+    id: 'timothy_recruitment',
+    name: '提摩太加入',
+    type: 'event',
+    description: '提摩太成为同工',
+    text: '提摩太加入了团队，他是一个忠心的代笔者。',
+    effect: { morale: 15, stability: 5 },
+  },
+  sceva_sons: {
+    id: 'sceva_sons',
+    name: '士基瓦的儿子们',
+    type: 'decision',
+    description: '有人擅自奉保罗所传的耶稣赶鬼',
+    text: '有几个游方赶鬼的犹太人，擅自奉保罗所传的耶稣赶鬼，结果恶鬼反而制服了他们。',
+    choices: [
+      { label: '澄清真理', description: '向众人说明真道', effect: { faith: 10, stability: 10 } },
+      { label: '保持沉默', description: '让事件自然平息', effect: { persecution: -5 } },
+    ],
+  } as DecisionEvent,
+  burning_scrolls: {
+    id: 'burning_scrolls',
+    name: '焚烧邪术书卷',
+    type: 'event',
+    description: '信徒焚烧邪术书卷',
+    text: '那已经信的人，多有来承认诉说自己所行的事，焚烧邪术书卷。',
+    effect: { faith: 20, stability: 15, reputation: 10 },
+  },
+  silversmith_riot: {
+    id: 'silversmith_riot',
+    name: '银匠暴乱',
+    type: 'event',
+    description: '银匠底米丢聚集众人反对',
+    text: '银匠底米丢聚集众人反对保罗，说保罗搅乱了以弗所全城。',
+    effect: { stamina: -20, provision: -10 },
+  },
+};
+
+const LETTER_EVENTS: GameEvent[] = [
+  {
+    id: 'letter_galatians',
+    name: '加拉太书的启示',
+    type: 'event',
+    description: '你感受到圣灵的感动，要为加拉太的教会写一封信',
+    text: '要为加拉太的教会写信，澄清因信称义的真理。',
+    effect: { faith: 20, reputation: 10 },
+  },
+  {
+    id: 'letter_philippians',
+    name: '腓立比书的喜乐',
+    type: 'event',
+    description: '想念腓立比教会的同工们',
+    text: '想写信鼓励他们无论在什么景况都要喜乐。',
+    effect: { faith: 15, reputation: 8 },
+  },
+  {
+    id: 'letter_ephesians',
+    name: '以弗所书的奥秘',
+    type: 'event',
+    description: '神启示教会的奥秘',
+    text: '神启示你教会的奥秘——外邦人在基督耶稣里，藉着福音，得以同为后嗣。',
+    effect: { faith: 25, reputation: 12 },
+  },
+];
+
+// ============================================
+// 8. GameEngine 类
+// ============================================
+
+class GameEngine {
+  player: Player;
+  currentCity: City | null;
+  letterSystem: LetterSystem;
+  gameLog: string[];
+  isGameOver: boolean;
+  isVictory: boolean;
+  currentTurn: number;
+  maxTurns: number;
+  availableCities: string[];
+  completedCities: string[];
+  cities: City[];
+  currentCityIndex: number;
+  gameOver: boolean;
+  victory: boolean;
+  eventHistory: string[];
+  tyrannusMode: boolean;
+  companions: Companion[];
+  companionLimit: number;
+  totalFaithfulnessPoints: number;
+  cityStabilityRecords: Map<string, number>;
+  totalPersecutionReceived: number;
+  totalStabilityLost: number;
+
+  constructor() {
+    this.player = new Player();
+    this.currentCity = null;
+    this.letterSystem = new LetterSystem();
+    this.gameLog = [];
+    this.isGameOver = false;
+    this.isVictory = false;
+    this.currentTurn = 0;
+    this.maxTurns = 15;
+    this.availableCities = ['Antioch', 'Philippi', 'Ephesus'];
+    this.completedCities = [];
+    this.cities = [];
+    this.currentCityIndex = 0;
+    this.gameOver = false;
+    this.victory = false;
+    this.eventHistory = [];
+    this.tyrannusMode = false;
+    this.companions = [];
+    this.companionLimit = 2;
+    this.totalFaithfulnessPoints = 0;
+    this.cityStabilityRecords = new Map();
+    this.totalPersecutionReceived = 0;
+    this.totalStabilityLost = 0;
+    
+    // 初始化城市
+    for (const cityId of this.availableCities) {
+      this.cities.push(new City(cityId));
+    }
+    
+    if (this.cities.length > 0) {
+      this.currentCity = this.cities[0];
+    }
+  }
+
+  initializeGame(): void {
+    // 初始化同工
+    const barnabas = new Companion('barnabas', 'Barnabas', '巴拿巴', 'counselor', '劝慰者', '提升探访效率和士气恢复');
+    const silas = new Companion('silas', 'Silas', '西拉', 'resilient', '坚韧者', '降低逼迫带来的体力损耗');
+    const timothy = new Companion('timothy', 'Timothy', '提摩太', 'scribe', '忠心代笔者', '协助撰写书信，体力消耗减半');
+    const luke = new Companion('luke', 'Luke', '路加', 'healing', '医治', '擅长医治病人');
+    const priscilla = new Companion('priscilla', 'Priscilla', '百基拉', 'crafting', '织造', '擅长织造帐篷');
+    
+    this.player.addCompanion(barnabas);
+    this.companions.push(barnabas);
+    
+    this.addToLog('游戏开始！保罗的宣教之旅正式启程。');
+    this.addToLog('你的同工团队：巴拿巴（初始）');
+    this.addToLog('其他同工将在后续城市加入。');
+  }
+
+  addCompanion(companion: Companion): boolean {
+    if (this.companions.length >= this.companionLimit) {
+      return false;
+    }
+    this.companions.push(companion);
+    this.player.addCompanion(companion);
+    return true;
+  }
+
+  getActiveCompanions(): Companion[] {
+    return this.companions.filter(c => c.morale >= 20 && c.stamina > 0);
+  }
+
+  hasScribeCompanion(): boolean {
+    return this.companions.some(c => c.specialty === 'scribe' && c.morale >= 20);
+  }
+
+  startCity(cityId: string): boolean {
+    if (!this.availableCities.includes(cityId)) {
+      return false;
+    }
+    
+    this.currentCity = new City(cityId);
+    this.player.currentCity = cityId;
+    
+    if (!this.player.visitedCities.includes(cityId)) {
+      this.player.visitedCities.push(cityId);
+    }
+    
+    this.addToLog(`抵达${this.currentCity.nameChinese}(${this.currentCity.name})`);
+    this.addToLog(this.currentCity.description);
+    
+    // 触发城市事件
+    this.triggerCityEvent(cityId);
+    
+    return true;
+  }
+
+  triggerCityEvent(cityId: string): void {
+    let events: (GameEvent | DecisionEvent)[] = [];
+    
+    switch (cityId) {
+      case 'Antioch':
+        events = Object.values(ANTIOCH_EVENTS);
+        break;
+      case 'Philippi':
+        events = Object.values(PHILIPPI_EVENTS);
+        break;
+      case 'Ephesus':
+        events = Object.values(EPHESUS_EVENTS);
+        break;
+    }
+    
+    if (events.length > 0) {
+      const randomEvent = events[Math.floor(Math.random() * events.length)];
+      if (randomEvent.type === 'event') {
+        const event = randomEvent as GameEvent;
+        this.addToLog(`【事件】${event.name}: ${event.description}`);
+        
+        // 自动选择第一个选项
+        this.player.applyEffects(event.effect);
+        this.addToLog(`影响: ${JSON.stringify(event.effect)}`);
+      }
+    }
+  }
+
+  performAction(actionType: ActionType): { success: boolean; message: string } {
+    if (!this.currentCity) {
+      return { success: false, message: '没有当前城市' };
+    }
+    
+    if (this.isGameOver) {
+      return { success: false, message: '游戏已结束' };
+    }
+    
+    const action = ACTIONS[actionType];
+    
+    // 检查资源
+    if (!this.player.consumeResources(action.cost)) {
+      return { success: false, message: '资源不足，无法执行此行动' };
+    }
+    
+    // 应用行动效果
+    this.player.applyEffects(action.effect);
+    
+    // 应用同工加成
+    for (const companion of this.player.getActiveCompanions()) {
+      const bonus = companion.applySpecialtyEffect(actionType);
+      this.player.applyEffects(bonus);
+    }
+    
+    // 更新城市状态
+    if (action.effect.disciples) {
+      this.currentCity.addDisciples(action.effect.disciples);
+    }
+    if (action.effect.reputation) {
+      this.currentCity.addReputation(action.effect.reputation);
+    }
+    
+    // 推进回合
+    this.currentTurn++;
+    const cityCompleted = this.currentCity.advanceTurn();
+    
+    this.addToLog(`执行行动: ${action.nameChinese} - ${action.description}`);
+    
+    if (cityCompleted) {
+      this.completeCurrentCity();
+    }
+    
+    // 检查游戏结束条件
+    this.checkGameEnd();
+    
+    return { success: true, message: `成功执行${action.nameChinese}` };
+  }
+
+  handleAction(actionType: ActionType, companionActions?: Map<string, CompanionTaskType>): string {
+    if (this.isGameOver) {
+      return '游戏已结束。';
+    }
+
+    const action = ACTIONS[actionType];
+    
+    if (!this.canPerformAction(action)) {
+      return `资源不足，无法执行「${action.name}」`;
+    }
+
+    // 记录忠心点数
+    if (actionType === 'preach' && this.player.persecution > 70) {
+      this.totalFaithfulnessPoints += 10;
+    }
+
+    const prevStability = this.player.stability;
+    
+    // 处理同工任务
+    let companionResults: string[] = [];
+    if (companionActions) {
+      for (const [companionId, taskType] of companionActions) {
+        const companion = this.companions.find(c => c.id === companionId);
+        if (companion) {
+          const result = companion.assignTask(taskType);
+          if (result.success) {
+            this.player.applyEffects(result.effect);
+            companionResults.push(`✅ ${result.message}`);
+          } else {
+            companionResults.push(`❌ ${result.message}`);
+          }
+        }
+      }
+    }
+
+    // 应用保罗的行动效果
+    this.player.applyEffects(action.effect);
+    
+    // 回合推进
+    this.currentCity?.nextRound();
+    
+    // 回合结束结算
+    this.endOfRoundSettlement();
+    
+    // 追踪教会健康度变化
+    const stabilityLoss = prevStability - this.player.stability;
+    if (stabilityLoss > 0) {
+      this.totalStabilityLost += stabilityLoss;
+    }
+    
+    // 恢复同工体力
+    this.companions.forEach(c => c.recoverStamina());
+    
+    if (this.currentCity && !this.currentCity.hasMoreRounds()) {
+      this.moveToNextCity();
+    }
+    
+    // 检查游戏结束条件
+    this.checkGameEnd();
+
+    return this.generateActionResult(action, companionResults);
+  }
+
+  private canPerformAction(action: Action): boolean {
+    const effect = action.effect;
+    if (effect.stamina && effect.stamina < 0 && this.player.stamina < Math.abs(effect.stamina)) {
+      return false;
+    }
+    if (effect.provision && effect.provision < 0 && this.player.provision < Math.abs(effect.provision)) {
+      return false;
+    }
+    return true;
+  }
+
+  private endOfRoundSettlement(): void {
+    if (this.currentCity) {
+      // 追踪累计逼迫值
+      this.totalPersecutionReceived += this.currentCity.basePersecutionRate;
+      
+      // 城市固有的逼迫增长
+      this.player.applyEffects({
+        persecution: this.currentCity.basePersecutionRate,
+      });
+      
+      // 以弗所特殊机制
+      if (this.currentCity.name === 'Ephesus' && this.tyrannusMode) {
+        this.player.applyEffects({ stamina: -10 });
+      }
+    }
+    
+    this.checkCrisisEvents();
+  }
+
+  private checkCrisisEvents(): void {
+    // 暴动事件
+    if (this.player.persecution > 70) {
+      console.log('\n⚠️  【暴动事件】逼迫太甚，会堂中有人起来反对！');
+      this.player.applyEffects({ stamina: -15, stability: -10 });
+    }
+
+    // 分裂风险
+    if (this.player.stability < 30) {
+      console.log('\n⚠️  【分裂风险】信徒之间产生争论，需要更多关怀！');
+      this.player.applyEffects({ stability: -5 });
+    }
+
+    if (!this.player.isAlive()) {
+      this.gameOver = true;
+      this.victory = false;
+    }
+  }
+
+  private moveToNextCity(): void {
+    if (!this.currentCity) return;
+    
+    console.log(`\n🎉 完成 ${this.currentCity.nameChinese} 的宣教工作！准备前往下一城...\n`);
+    
+    // 记录当前城市的教会健康度
+    this.cityStabilityRecords.set(this.currentCity.name, this.player.stability);
+    
+    // 离开以弗所时重置推喇奴学房模式
+    if (this.currentCity.name === 'Ephesus') {
+      this.tyrannusMode = false;
+    }
+    
+    this.currentCityIndex++;
+    
+    if (this.currentCityIndex >= this.cities.length) {
+      this.gameOver = true;
+      this.victory = true;
+    } else {
+      this.currentCity = this.cities[this.currentCityIndex];
+      
+      // 招募新同工
+      this.recruitCompanionForCity();
+    }
+  }
+
+  private recruitCompanionForCity(): void {
+    if (!this.currentCity) return;
+    
+    if (this.currentCity.name === 'Philippi' && !this.companions.some(c => c.id === 'silas')) {
+      const silas = new Companion(
+        'silas',
+        'Silas',
+        '西拉',
+        'resilient',
+        '坚韧者',
+        '降低逼迫带来的体力损耗，增强教导能力'
+      );
+      if (this.addCompanion(silas)) {
+        console.log(`\n👥 【同工加入】${silas.nameChinese}加入了团队！`);
+        console.log(`   特性：${silas.specialtyName} - ${silas.specialtyDescription}`);
+      }
+    }
+    
+    if (this.currentCity.name === 'Ephesus' && !this.companions.some(c => c.id === 'timothy')) {
+      const timothy = new Companion(
+        'timothy',
+        'Timothy',
+        '提摩太',
+        'scribe',
+        '忠心代笔者',
+        '协助撰写书信，体力消耗减半'
+      );
+      if (this.addCompanion(timothy)) {
+        console.log(`\n👥 【同工加入】${timothy.nameChinese}加入了团队！`);
+        console.log(`   特性：${timothy.specialtyName} - ${timothy.specialtyDescription}`);
+      }
+    }
+  }
+
+  private generateActionResult(action: Action, companionResults: string[]): string {
+    let result = `\n✅ 执行「${action.name}」`;
+    if (companionResults.length > 0) {
+      result += '\n' + companionResults.join('\n');
+    }
+    result += `\n${this.player.getStatus()}`;
+    if (this.currentCity) {
+      result += `\n📍 当前位置: ${this.currentCity.getRoundInfo()}`;
+    }
+    return result;
+  }
+
+  writeLetter(): { success: boolean; message: string } {
+    if (!this.currentCity) {
+      return { success: false, message: '没有当前城市' };
+    }
+    
+    if (!this.letterSystem.canWriteLetter(this.currentCity.id, this.player)) {
+      return { success: false, message: '条件不满足（需要至少3名门徒和30信心值）' };
+    }
+    
+    const result = this.letterSystem.writeLetter(this.currentCity.id, this.currentCity.nameChinese);
+    
+    if (result.success) {
+      this.player.applyEffects(result.effect || {});
+      this.currentCity.letterWritten = true;
+      this.addToLog(result.message);
+    }
+    
+    return result;
+  }
+
+  completeCurrentCity(): void {
+    if (!this.currentCity) return;
+    
+    this.completedCities.push(this.currentCity.id);
+    this.addToLog(`完成${this.currentCity.nameChinese}的事工！`);
+    
+    // 奖励
+    const bonus: ResourceChange = {
+      faith: 20,
+      reputation: 10,
+    };
+    
+    if (this.currentCity.disciplesGained >= 5) {
+      bonus.churches = 1;
+      this.addToLog('建立了新的教会！');
+    }
+    
+    this.player.applyEffects(bonus);
+  }
+
+  moveToNextCityManual(): boolean {
+    if (this.completedCities.length >= this.availableCities.length) {
+      this.isGameOver = true;
+      this.isVictory = true;
+      return false;
+    }
+    
+    // 找到下一个未访问的城市
+    for (const cityId of this.availableCities) {
+      if (!this.completedCities.includes(cityId)) {
+        this.startCity(cityId);
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
+  checkGameEnd(): void {
+    // 检查胜利条件
+    if (this.completedCities.length >= 3 && this.letterSystem.isCompleteCollection()) {
+      this.isGameOver = true;
+      this.isVictory = true;
+      this.addToLog('恭喜！你完成了保罗的三次宣教旅程并收集了所有书信！');
+      return;
+    }
+    
+    // 检查失败条件
+    if (this.player.faith <= 0) {
+      this.isGameOver = true;
+      this.isVictory = false;
+      this.addToLog('游戏结束：信心耗尽...');
+      return;
+    }
+    
+    if (this.player.stamina <= 0) {
+      this.isGameOver = true;
+      this.isVictory = false;
+      this.addToLog('游戏结束：体力耗尽...');
+      return;
+    }
+    
+    if (this.currentTurn >= this.maxTurns) {
+      this.isGameOver = true;
+      this.isVictory = this.completedCities.length >= 2;
+      this.addToLog(this.isVictory ? '时间到，但你完成了主要目标！' : '时间到，未能完成主要目标...');
+    }
+  }
+
+  assignCompanionTask(companionId: string, task: CompanionTaskType): { success: boolean; message: string } {
+    const companion = this.player.companions.find(c => c.id === companionId);
+    if (!companion) {
+      return { success: false, message: '找不到该同工' };
+    }
+    
+    if (!companion.isActive) {
+      return { success: false, message: '该同工当前不活跃' };
+    }
+    
+    const result = companion.assignTask(task);
+    if (result.success) {
+      const taskInfo = COMPANION_TASKS[task];
+      this.player.applyEffects(result.effect);
+      this.addToLog(`${companion.nameChinese}执行${taskInfo.nameChinese}任务: ${taskInfo.description}`);
+      return { success: true, message: `成功分配任务` };
+    }
+    
+    return { success: false, message: result.message };
+  }
+
+  triggerEvent(): { event: GameEvent | DecisionEvent | null; message: string } {
+    // 安提阿事件流
+    if (this.currentCity?.name === 'Antioch') {
+      if (this.currentCity.currentTurn === 2 && !this.eventHistory.includes('christian_name')) {
+        return this.executeEvent(ANTIOCH_EVENTS['christian_name'] as GameEvent);
+      }
+      
+      if (this.player.provision < 20 && this.currentCity.currentTurn >= 3 && 
+          !this.eventHistory.includes('paul_barnabas_dispute')) {
+        return { event: ANTIOCH_EVENTS['paul_barnabas_dispute'], message: '' };
+      }
+    }
+    
+    // 腓立比事件流
+    if (this.currentCity?.name === 'Philippi') {
+      if (this.currentCity.currentTurn === 1 && !this.eventHistory.includes('lydia_meeting')) {
+        return this.executeEvent(PHILIPPI_EVENTS['lydia_meeting'] as GameEvent);
+      }
+    }
+    
+    return { event: null, message: '' };
+  }
+
+  private executeEvent(event: GameEvent): { event: GameEvent | DecisionEvent | null; message: string } {
+    if (event.type === 'decision') {
+      return { event, message: '' };
+    }
+    
+    this.eventHistory.push(event.id);
+    this.player.applyEffects(event.effect);
+    
+    let message = '\n' + '='.repeat(50);
+    message += `\n📜 【${event.name}】${event.description}`;
+    message += '\n' + '-'.repeat(50);
+    message += `\n${event.text}`;
+    message += '\n' + '-'.repeat(50);
+    
+    const changes: string[] = [];
+    if (event.effect.stability) changes.push(`教会健康 ${event.effect.stability > 0 ? '+' : ''}${event.effect.stability}`);
+    if (event.effect.persecution) changes.push(`逼迫指数 ${event.effect.persecution > 0 ? '+' : ''}${event.effect.persecution}`);
+    if (event.effect.stamina) changes.push(`体力 ${event.effect.stamina > 0 ? '+' : ''}${event.effect.stamina}`);
+    if (event.effect.provision) changes.push(`物资 ${event.effect.provision > 0 ? '+' : ''}${event.effect.provision}`);
+    if (event.effect.reputation) changes.push(`名声 ${event.effect.reputation > 0 ? '+' : ''}${event.effect.reputation}`);
+    if (event.effect.morale) changes.push(`同工士气 ${event.effect.morale > 0 ? '+' : ''}${event.effect.morale}`);
+    
+    if (changes.length > 0) {
+      message += `\n📊 影响：${changes.join('， ')}`;
+    }
+    message += '\n' + '='.repeat(50);
+    
+    return { event, message };
+  }
+
+  handleDecision(eventId: string, choiceIndex: number): string {
+    const event = (ANTIOCH_EVENTS[eventId] || PHILIPPI_EVENTS[eventId] || EPHESUS_EVENTS[eventId]) as DecisionEvent;
+    if (!event || event.type !== 'decision') {
+      return '无效的事件或决策';
+    }
+    
+    if (choiceIndex < 0 || choiceIndex >= event.choices.length) {
+      return '无效的选择';
+    }
+    
+    this.eventHistory.push(eventId);
+    const choice = event.choices[choiceIndex];
+    this.player.applyEffects(choice.effect);
+    
+    // 处理同工争执的特殊效果
+    if (eventId === 'paul_barnabas_dispute') {
+      if (choiceIndex === 0) {
+        // 巴拿巴带着马可离开
+        const barnabas = this.companions.find(c => c.id === 'barnabas');
+        if (barnabas) {
+          barnabas.isActive = false;
+          console.log('\n💔 巴拿巴带着马可前往塞浦路斯...');
+        }
+      }
+    }
+    
+    let message = '\n' + '='.repeat(50);
+    message += `\n📜 【${event.name}】${event.description}`;
+    message += '\n' + '-'.repeat(50);
+    message += `\n${event.text}`;
+    message += '\n' + '-'.repeat(50);
+    message += `\n✅ 你选择：${choice.label}`;
+    message += `\n   ${choice.description}`;
+    
+    const changes: string[] = [];
+    if (choice.effect.stability) changes.push(`教会健康 ${choice.effect.stability > 0 ? '+' : ''}${choice.effect.stability}`);
+    if (choice.effect.persecution) changes.push(`逼迫指数 ${choice.effect.persecution > 0 ? '+' : ''}${choice.effect.persecution}`);
+    if (choice.effect.stamina) changes.push(`体力 ${choice.effect.stamina > 0 ? '+' : ''}${choice.effect.stamina}`);
+    if (choice.effect.provision) changes.push(`物资 ${choice.effect.provision > 0 ? '+' : ''}${choice.effect.provision}`);
+    if (choice.effect.morale) changes.push(`同工士气 ${choice.effect.morale > 0 ? '+' : ''}${choice.effect.morale}`);
+    
+    if (changes.length > 0) {
+      message += `\n📊 影响：${changes.join('， ')}`;
+    }
+    message += '\n' + '='.repeat(50);
+    
+    return message;
+  }
+
+  calculateFinalScore(): {
+    totalScore: number;
+    churchMaturity: number;
+    resilience: number;
+    stewardship: number;
+    faithfulness: number;
+    letterBonus: number;
+    verdict: string;
+    description: string;
+  } {
+    if (this.currentCity && !this.cityStabilityRecords.has(this.currentCity.name)) {
+      this.cityStabilityRecords.set(this.currentCity.name, this.player.stability);
+    }
+    
+    let totalStability = 0;
+    let cityCount = 0;
+    this.cityStabilityRecords.forEach((stability) => {
+      totalStability += stability;
+      cityCount++;
+    });
+    if (cityCount < this.cities.length) {
+      totalStability += this.player.stability;
+      cityCount++;
+    }
+    const churchMaturity = cityCount > 0 ? (totalStability / cityCount) : 0;
+    
+    let resilience = 100;
+    if (this.totalStabilityLost > 0) {
+      resilience = Math.max(0, 100 - (this.totalStabilityLost / this.totalPersecutionReceived) * 100);
+    }
+    
+    const staminaRatio = this.player.stamina / 100;
+    const provisionRatio = this.player.provision / 150;
+    const stewardship = ((staminaRatio + provisionRatio) / 2) * 100;
+    
+    const faithfulness = Math.min(100, 50 + this.totalFaithfulnessPoints);
+    
+    // 书信加成
+    const letterBonus = this.letterSystem.letterScore / 10;
+    
+    const totalScore = 
+      (churchMaturity * 0.35) +
+      (resilience * 0.15) +
+      (stewardship * 0.15) +
+      (faithfulness * 0.20) +
+      (Math.min(letterBonus, 15));
+    
+    // 完整书信集隐藏加成
+    const collectionComplete = this.letterSystem.isCompleteCollection();
+    const finalScore = collectionComplete ? Math.min(100, totalScore + 5) : totalScore;
+    
+    let verdict: string;
+    let description: string;
+    
+    if (finalScore >= 90) {
+      verdict = '【至死忠心的使徒】';
+      description = collectionComplete 
+        ? '"你到达了罗马，身上带着基督的印记。你在亚细亚和欧洲建立的教会稳固如磐石，同工们视你为榜样。新约书信在你手中完成，成为后世信徒永恒的指南。你打过了那美好的仗。"'
+        : '"你到达了罗马，身上带着基督的印记。你在亚细亚和欧洲建立的教会稳固如磐石，同工们视你为榜样。你打过了那美好的仗。"';
+    } else if (finalScore >= 70) {
+      verdict = '【劳苦的福音先锋】';
+      description = '"尽管路途艰辛，身体衰弱，但你成功地在关键城市扎下了真理的根。书信成为了你留给后世最宝贵的财富。"';
+    } else if (finalScore >= 40) {
+      verdict = '【疲惫的守望者】';
+      description = '"你到达了罗马，但心中充满了忧虑。部分城市的教会因缺乏教导而动摇。你尽力了，但资源匮乏让你步履维艰。"';
+    } else {
+      verdict = '【被围困的独行者】';
+      description = '"你几乎是孤身一人到达罗马。虽然完成了旅程，但身后的教会网络支离破碎。这趟旅程对你而言是一场惨烈的生还。"';
+    }
+    
+    return {
+      totalScore: Math.round(finalScore),
+      churchMaturity: Math.round(churchMaturity),
+      resilience: Math.round(resilience),
+      stewardship: Math.round(stewardship),
+      faithfulness: Math.round(faithfulness),
+      letterBonus: Math.round(letterBonus),
+      verdict,
+      description,
+    };
+  }
+
+  displayEvaluation(): string {
+    const score = this.calculateFinalScore();
+    
+    let output = '\n' + '='.repeat(60);
+    output += '\n' + ' '.repeat(15) + '📊 使命忠心度评估 📊';
+    output += '\n' + '='.repeat(60);
+    output += '\n';
+    output += '\n📈 详细评分：';
+    output += `\n   教会成熟度 (35%): ${score.churchMaturity}/100`;
+    output += `\n   使命韧性   (15%): ${score.resilience}/100`;
+    output += `\n   资源管家   (15%): ${score.stewardship}/100`;
+    output += `\n   忠心指数   (20%): ${score.faithfulness}/100`;
+    output += `\n   书信贡献   (+15): ${score.letterBonus}/15`;
+    output += '\n' + '-'.repeat(60);
+    output += `\n📊 总分: ${score.totalScore}/100`;
+    if (this.letterSystem.isCompleteCollection()) {
+      output += '\n🏆 【隐藏成就】完成新约书信全集！';
+    }
+    output += '\n' + '='.repeat(60);
+    output += `\n🏆 ${score.verdict}`;
+    output += '\n' + '-'.repeat(60);
+    output += `\n${score.description}`;
+    output += '\n' + '='.repeat(60);
+    
+    return output;
+  }
+
+  getGameStateDisplay(): string {
+    if (this.gameOver) {
+      if (this.victory) {
+        return '\n🏆 【游戏结束】你完成了所有城市的宣教使命！"那美好的仗我已经打过了..."';
+      } else {
+        return '\n💀 【游戏结束】你耗尽了体力或物资，无法继续旅程。请重新开始。';
+      }
+    }
+
+    let state = `${this.player.getStatus()}`;
+    if (this.currentCity) {
+      state += `\n📍 当前位置: ${this.currentCity.getRoundInfo()}`;
+    }
+    
+    // 显示同工团队
+    if (this.companions.length > 0) {
+      state += '\n\n👥 同工团队：';
+      this.companions.forEach(companion => {
+        state += '\n   ' + companion.getStatus();
+      });
+    }
+    
+    // 显示书信收集
+    state += this.letterSystem.getCollectionStatus();
+    
+    state += this.getAvailableActions();
+    
+    return state;
+  }
+
+  getAvailableActions(): string {
+    let output = '\n📋 可选行动:\n';
+    const actions: ActionType[] = ['preach', 'tentmaking', 'disciple', 'rest', 'write_letter'];
+    
+    actions.forEach((key, index) => {
+      const action = ACTIONS[key];
+      output += `  ${index + 1}. ${action.nameChinese} - ${action.description}\n`;
+    });
+    
+    return output;
+  }
+
+  addToLog(message: string): void {
+    this.gameLog.push(`[回合${this.currentTurn}] ${message}`);
+  }
+
+  getGameLog(): string[] {
+    return this.gameLog;
+  }
+
+  getGameState(): {
+    player: Player;
+    currentCity: City | null;
+    turn: number;
+    maxTurns: number;
+    isGameOver: boolean;
+    isVictory: boolean;
+    letterCollection: ReturnType<LetterSystem['getCollectionStatus']>;
+  } {
+    return {
+      player: this.player,
+      currentCity: this.currentCity,
+      turn: this.currentTurn,
+      maxTurns: this.maxTurns,
+      isGameOver: this.isGameOver,
+      isVictory: this.isVictory,
+      letterCollection: this.letterSystem.getCollectionStatus(),
+    };
+  }
+
+  async runDemo(delay: number = 1000): Promise<void> {
+    console.log('\n🎮 开始保罗旅行布道游戏演示...\n');
+    this.initializeGame();
+    console.log(this.getGameStateDisplay());
+
+    const actionKeys: ActionType[] = ['preach', 'tentmaking', 'disciple', 'rest'];
+
+    while (!this.gameOver) {
+      await this.sleep(delay);
+      
+      const eventResult = this.triggerEvent();
+      if (eventResult.event) {
+        if (eventResult.event.type === 'decision') {
+          const decisionEvent = eventResult.event as DecisionEvent;
+          const randomChoice = Math.floor(Math.random() * decisionEvent.choices.length);
+          const decisionResult = this.handleDecision(eventResult.event.id, randomChoice);
+          console.log(decisionResult);
+        } else {
+          console.log(eventResult.message);
+        }
+        await this.sleep(delay);
+      }
+      
+      // AI策略：简单决策
+      const randomAction = actionKeys[Math.floor(Math.random() * actionKeys.length)];
+      
+      let chosenAction: ActionType;
+      if (this.player.stamina < 30) {
+        chosenAction = 'rest';
+      } else if (this.player.provision < 20) {
+        chosenAction = 'tentmaking';
+      } else if (this.player.persecution > 60) {
+        chosenAction = 'disciple';
+      } else {
+        chosenAction = randomAction;
+      }
+
+      // AI分配同工任务（简化版）
+      const companionActions = new Map<string, CompanionTaskType>();
+      this.companions.forEach(companion => {
+        if (companion.stamina > 20 && companion.morale >= 40) {
+          if (this.player.stability < 40) {
+            companionActions.set(companion.id, 'teach');
+          } else if (this.player.persecution > 50) {
+            companionActions.set(companion.id, 'visitation');
+          } else {
+            companionActions.set(companion.id, 'logistics');
+          }
+        } else {
+          companionActions.set(companion.id, 'rest');
+        }
+      });
+
+      const result = this.handleAction(chosenAction, companionActions);
+      console.log(result);
+    }
+
+    console.log(this.getGameStateDisplay());
+    
+    if (this.victory) {
+      console.log(this.displayEvaluation());
+    }
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+}
+
+// ============================================
+// 9. 主函数和导出
+// ============================================
+
+import * as readline from 'readline';
+
+// 演示模式 - 自动运行
+async function runDemoMode(): Promise<void> {
+  const game = new GameEngine();
+  console.log('\n🎮 开始演示模式（AI自动游玩）...\n');
+  await game.runDemo(800);
+}
+
+// 交互模式 - 手动游玩
+async function runInteractiveMode(): Promise<void> {
+  const game = new GameEngine();
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  
+  const question = (prompt: string): Promise<string> => {
+    return new Promise((resolve) => {
+      rl.question(prompt, (answer) => resolve(answer));
+    });
+  };
+
+  console.clear?.();
+  console.log('\n🎮 欢迎来到《保罗旅行布道》v2.0！');
+  console.log('\n🆕 新特性：');
+  console.log('- 👥 同工系统：招募同工，分配任务，团队协作');
+  console.log('- ✉️ 书信系统：撰写书信，跨越时空治理教会');
+  console.log('- 📚 收集要素：完成新约书信全集，解锁隐藏结局');
+  console.log('\n按 Enter 开始游戏...');
+  await question('');
+
+  // 初始化游戏
+  game.initializeGame();
+  game.startCity('Antioch');
+
+  while (!game.isGameOver) {
+    console.clear?.();
+    console.log(game.getGameStateDisplay());
+    console.log();
+    
+    // 显示游戏日志（最近5条）
+    const logs = game.getGameLog().slice(-5);
+    if (logs.length > 0) {
+      console.log('📜 最近事件：');
+      logs.forEach(log => console.log('  ' + log));
+      console.log();
+    }
+
+    // 为同工分配任务
+    const activeCompanions = game.player.companions.filter(c => c.isActive && c.morale >= 20);
+    const companionActions = new Map<string, CompanionTaskType>();
+    
+    if (activeCompanions.length > 0) {
+      console.log('👥 同工任务分配：');
+      for (const companion of activeCompanions) {
+        console.log(`\n${companion.nameChinese} (${companion.specialtyName})`);
+        console.log(`  体力: ${companion.stamina}/${companion.maxStamina} | 士气: ${companion.morale}`);
+        console.log('  可选任务：');
+        console.log('    1. 教导 (+12教会健康, -15体力)');
+        console.log('    2. 探访 (-8逼迫, +3健康, -12体力)');
+        console.log('    3. 后勤 (+20物资, -10体力)');
+        console.log('    4. 协助写作 (降低写信消耗, -8体力)');
+        console.log('    5. 休息 (+15体力)');
+        
+        let validChoice = false;
+        while (!validChoice) {
+          const choice = await question(`请选择${companion.nameChinese}的任务 (1-5)：`);
+          const taskMap: Record<string, CompanionTaskType> = {
+            '1': 'teach',
+            '2': 'visitation',
+            '3': 'logistics',
+            '4': 'assist_writing',
+            '5': 'rest',
+          };
+          if (taskMap[choice.trim()]) {
+            companionActions.set(companion.id, taskMap[choice.trim()]);
+            validChoice = true;
+          } else {
+            console.log('❌ 无效选择，请重新输入');
+          }
+        }
+      }
+    }
+
+    // 选择保罗的行动
+    console.log('\n🎯 保罗的行动：');
+    console.log('  1. 公开讲道 (+15健康, +20逼迫, -20体力)');
+    console.log('  2. 织帐棚 (+30物资, -2健康, -15体力)');
+    console.log('  3. 私下门训 (+5健康, +2逼迫, -10体力)');
+    console.log('  4. 休息 (+20体力, -10物资)');
+    console.log('  5. 撰写书信 (-25体力)');
+    console.log('  q. 退出游戏');
+
+    const actionChoice = await question('\n请选择行动 (1-5/q)：');
+    
+    if (actionChoice.toLowerCase() === 'q') {
+      console.log('\n👋 感谢游玩！再见！');
+      rl.close();
+      return;
+    }
+
+    const actionMap: Record<string, ActionType> = {
+      '1': 'preach',
+      '2': 'tentmaking',
+      '3': 'disciple',
+      '4': 'rest',
+      '5': 'write_letter',
+    };
+
+    const actionType = actionMap[actionChoice.trim()];
+    if (!actionType) {
+      console.log('❌ 无效选择');
+      await question('\n按 Enter 继续...');
+      continue;
+    }
+
+    // 执行行动
+    const result = game.handleAction(actionType, companionActions);
+    console.log('\n' + result);
+
+    // 检查事件
+    const eventResult = game.triggerEvent();
+    if (eventResult.event) {
+      if (eventResult.event.type === 'decision') {
+        const decisionEvent = eventResult.event as DecisionEvent;
+        console.log('\n' + '='.repeat(50));
+        console.log(`📜 ${decisionEvent.name}`);
+        console.log(decisionEvent.text);
+        console.log('='.repeat(50));
+        decisionEvent.choices.forEach((choice, index) => {
+          console.log(`  ${index + 1}. ${choice.label}`);
+          console.log(`     ${choice.description}`);
+        });
+        
+        let validDecision = false;
+        while (!validDecision) {
+          const decisionChoice = await question('\n请选择 (1-2)：');
+          const choiceIndex = parseInt(decisionChoice.trim()) - 1;
+          if (choiceIndex === 0 || choiceIndex === 1) {
+            const decisionResult = game.handleDecision(decisionEvent.id, choiceIndex);
+            console.log(decisionResult);
+            validDecision = true;
+          } else {
+            console.log('❌ 无效选择');
+          }
+        }
+      } else {
+        console.log(eventResult.message);
+      }
+    }
+
+    await question('\n按 Enter 继续...');
+  }
+
+  // 游戏结束
+  console.clear?.();
+  console.log(game.getGameStateDisplay());
+  
+  if (game.isVictory) {
+    console.log('\n🎊 恭喜完成宣教使命！');
+    console.log(game.displayEvaluation());
+  } else {
+    console.log('\n💀 游戏结束');
+  }
+  
+  await question('\n按 Enter 退出...');
+  rl.close();
+}
+
+// 主函数
+async function main(): Promise<void> {
+  // 检测命令行参数
+  const args = process.argv.slice(2);
+  
+  if (args.includes('--demo')) {
+    await runDemoMode();
+  } else {
+    await runInteractiveMode();
+  }
+}
+
+// 导出所有类和类型
+export {
+  // 类型
+  ResourceChange,
+  ActionType,
+  CompanionTaskType,
+  SpecialtyType,
+  Action,
+  LetterEffect,
+  GameEvent,
+  DecisionEvent,
+  
+  // 常量
+  INITIAL_RESOURCES,
+  CITY_CONFIG,
+  ACTIONS,
+  COMPANION_TASKS,
+  
+  // 事件
+  ANTIOCH_EVENTS,
+  PHILIPPI_EVENTS,
+  EPHESUS_EVENTS,
+  LETTER_EVENTS,
+  
+  // 类
+  Companion,
+  LetterSystem,
+  Player,
+  City,
+  GameEngine,
+  
+  // 主函数
+  main,
+};
+
+// 如果直接运行此文件，执行主函数
+if (typeof require !== 'undefined' && require.main === module) {
+  main();
+}
