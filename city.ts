@@ -30,7 +30,7 @@ class City {
     this.nameChinese = config.nameChinese;
     this.difficulty = config.difficulty;
     this.maxTurns = config.maxTurns;
-    this.currentTurn = 0;
+    this.currentTurn = 1;
     this.description = config.description;
     this.isCompleted = false;
     this.letterWritten = false;

@@ -4,8 +4,6 @@
 // ============================================
 
 import { ResourceChange, LetterEffect, Player } from './types.js';
-import { CITY_CONFIG } from './constants.js';
-import { City } from './city.js';
 
 class LetterSystem {
   epistleCollection: Map<string, boolean>;
@@ -20,55 +18,29 @@ class LetterSystem {
   }
 
   initializeEpistles(): void {
-    // 加拉太书
-    this.cityLetterEffects.set('galatians', [{
-      cityId: 'galatia',
+    this.cityLetterEffects.set('Antioch', [{
+      cityId: 'Antioch',
       effect: { faith: 20, reputation: 10, stability: 15 },
-      description: '加拉太书：维护因信称义的真理'
+      description: 'Epistle to Antioch'
     }]);
     
-    // 腓立比书
-    this.cityLetterEffects.set('philippians', [{
-      cityId: 'philippi',
+    this.cityLetterEffects.set('Philippi', [{
+      cityId: 'Philippi',
       effect: { faith: 25, reputation: 15, disciples: 2, stability: 10 },
-      description: '腓立比书：在患难中喜乐，追求基督里的合一'
+      description: 'Epistle to Philippians'
     }]);
     
-    // 以弗所书
-    this.cityLetterEffects.set('ephesians', [{
-      cityId: 'ephesus',
+    this.cityLetterEffects.set('Ephesus', [{
+      cityId: 'Ephesus',
       effect: { faith: 30, reputation: 20, churches: 1, stability: 20 },
-      description: '以弗所书：教会的奥秘，信徒在基督里的地位'
-    }]);
-    
-    // 歌罗西书
-    this.cityLetterEffects.set('colossians', [{
-      cityId: 'colossae',
-      effect: { faith: 20, disciples: 2, stability: 15 },
-      description: '歌罗西书：基督的至高无上'
-    }]);
-    
-    // 腓利门书
-    this.cityLetterEffects.set('philemon', [{
-      cityId: 'colossae',
-      effect: { reputation: 15, faith: 10, stability: 5 },
-      description: '腓利门书：弟兄相爱，饶恕与接纳'
+      description: 'Epistle to Ephesians'
     }]);
   }
 
   canWriteLetter(cityId: string, player: Player): boolean {
-    const cityConfig = CITY_CONFIG[cityId];
-    if (!cityConfig) return false;
-    
-    // 检查是否已经在该城市写过信
     if (this.epistleCollection.get(cityId)) return false;
-    
-    // 检查门徒数量是否足够
     if (player.disciples < 3) return false;
-    
-    // 检查信心值是否足够
     if (player.faith < 30) return false;
-    
     return true;
   }
 
@@ -95,19 +67,14 @@ class LetterSystem {
     let collected = 0;
     
     for (const [cityId, isCollected] of this.epistleCollection) {
-      const cityConfig = CITY_CONFIG[cityId];
-      const cityName = cityConfig ? cityConfig.nameChinese : cityId;
-      letters.push({ city: cityName, collected: isCollected });
+      letters.push({ city: cityId, collected: isCollected });
       if (isCollected) collected++;
     }
     
-    // 添加可以写的书信
     const possibleLetters = [
-      { cityId: 'galatians', city: '加拉太' },
-      { cityId: 'philippians', city: '腓立比' },
-      { cityId: 'ephesians', city: '以弗所' },
-      { cityId: 'colossians', city: '歌罗西' },
-      { cityId: 'philemon', city: '腓利门' },
+      { cityId: 'Antioch', city: '安提阿' },
+      { cityId: 'Philippi', city: '腓立比' },
+      { cityId: 'Ephesus', city: '以弗所' },
     ];
     
     for (const letter of possibleLetters) {
@@ -129,11 +96,9 @@ class LetterSystem {
   // 紧凑单行格式
   getCompactCollectionStatus(): string {
     const possibleLetters = [
-      { cityId: 'galatians', city: '加' },
-      { cityId: 'philippians', city: '腓' },
-      { cityId: 'ephesians', city: '以' },
-      { cityId: 'colossians', city: '歌' },
-      { cityId: 'philemon', city: '门' },
+      { cityId: 'Antioch', city: '安' },
+      { cityId: 'Philippi', city: '腓' },
+      { cityId: 'Ephesus', city: '以' },
     ];
     
     let letterBar = '';
@@ -154,7 +119,7 @@ class LetterSystem {
   
   // 超紧凑格式（仅显示进度条）
   getUltraCompactStatus(): string {
-    const possibleLetters = ['galatians', 'philippians', 'ephesians', 'colossians', 'philemon'];
+    const possibleLetters = ['Antioch', 'Philippi', 'Ephesus'];
     let collected = 0;
     let letterBar = '';
     
@@ -179,8 +144,8 @@ class LetterSystem {
   }
 
   isCompleteCollection(): boolean {
-    const possibleLetters = ['galatians', 'philippians', 'ephesians', 'colossians', 'philemon'];
-    return possibleLetters.every(id => this.epistleCollection.get(id) === true);
+    const cities = ['Antioch', 'Philippi', 'Ephesus'];
+    return cities.every(id => this.epistleCollection.get(id) === true);
   }
 }
 

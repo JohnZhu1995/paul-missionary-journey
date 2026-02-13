@@ -24,8 +24,6 @@ class GameEngine {
   completedCities: string[];
   cities: City[];
   currentCityIndex: number;
-  gameOver: boolean;
-  victory: boolean;
   eventHistory: string[];
   tyrannusMode: boolean;
   companions: Companion[];
@@ -34,6 +32,7 @@ class GameEngine {
   cityStabilityRecords: Map<string, number>;
   totalPersecutionReceived: number;
   totalStabilityLost: number;
+  persecutionEventTriggered: boolean;
 
   constructor() {
     this.player = new Player();
@@ -48,8 +47,6 @@ class GameEngine {
     this.completedCities = [];
     this.cities = [];
     this.currentCityIndex = 0;
-    this.gameOver = false;
-    this.victory = false;
     this.eventHistory = [];
     this.tyrannusMode = false;
     this.companions = [];
@@ -58,6 +55,7 @@ class GameEngine {
     this.cityStabilityRecords = new Map();
     this.totalPersecutionReceived = 0;
     this.totalStabilityLost = 0;
+    this.persecutionEventTriggered = false;
     
     // 初始化城市
     for (const cityId of this.availableCities) {
@@ -107,7 +105,12 @@ class GameEngine {
       return false;
     }
     
-    this.currentCity = new City(cityId);
+    const city = this.cities.find(c => c.id === cityId);
+    if (!city) {
+      return false;
+    }
+    
+    this.currentCity = city;
     this.player.currentCity = cityId;
     
     if (!this.player.visitedCities.includes(cityId)) {
@@ -238,8 +241,21 @@ class GameEngine {
     // 应用保罗的行动效果
     this.player.applyEffects(action.effect);
     
+    // 书信系统特殊处理
+    if (actionType === 'write_letter' && this.currentCity) {
+      const letterResult = this.letterSystem.writeLetter(this.currentCity.id, this.currentCity.nameChinese);
+      if (letterResult.success) {
+        this.player.applyEffects(letterResult.effect || {});
+        this.currentCity.letterWritten = true;
+        companionResults.push(`✉️ ${letterResult.message}`);
+      } else {
+        companionResults.push(`❌ ${letterResult.message}`);
+      }
+    }
+    
     // 回合推进
     this.currentCity?.nextRound();
+    this.currentTurn++;
     
     // 回合结束结算
     this.endOfRoundSettlement();
@@ -294,10 +310,16 @@ class GameEngine {
   }
 
   private checkCrisisEvents(): void {
-    // 暴动事件
-    if (this.player.persecution > 70) {
+    // 暴动事件 - 逼迫首次超过70时触发，之后需要降低到50以下才能再次触发
+    if (this.player.persecution > 70 && !this.persecutionEventTriggered) {
       console.log('\n⚠️  【暴动事件】逼迫太甚，会堂中有人起来反对！');
       this.player.applyEffects({ stamina: -15, stability: -10 });
+      this.persecutionEventTriggered = true;
+    }
+    
+    // 逼迫降低后重置触发标记
+    if (this.player.persecution < 50) {
+      this.persecutionEventTriggered = false;
     }
 
     // 分裂风险
@@ -307,8 +329,8 @@ class GameEngine {
     }
 
     if (!this.player.isAlive()) {
-      this.gameOver = true;
-      this.victory = false;
+      this.isGameOver = true;
+      this.isVictory = false;
     }
   }
 
@@ -325,11 +347,14 @@ class GameEngine {
       this.tyrannusMode = false;
     }
     
+    // 重置暴动事件触发标记
+    this.persecutionEventTriggered = false;
+    
     this.currentCityIndex++;
     
     if (this.currentCityIndex >= this.cities.length) {
-      this.gameOver = true;
-      this.victory = true;
+      this.isGameOver = true;
+      this.isVictory = true;
     } else {
       this.currentCity = this.cities[this.currentCityIndex];
       
@@ -511,6 +536,25 @@ class GameEngine {
     if (this.currentCity?.name === 'Philippi') {
       if (this.currentCity.currentTurn === 1 && !this.eventHistory.includes('lydia_meeting')) {
         return this.executeEvent(PHILIPPI_EVENTS['lydia_meeting'] as GameEvent);
+      }
+    }
+    
+    // 以弗所事件流
+    if (this.currentCity?.name === 'Ephesus') {
+      if (this.currentCity.currentTurn === 1 && !this.eventHistory.includes('tyrannus_school')) {
+        return this.executeEvent(EPHESUS_EVENTS['tyrannus_school'] as GameEvent);
+      }
+      
+      if (this.currentCity.currentTurn === 2 && !this.eventHistory.includes('timothy_recruitment')) {
+        return this.executeEvent(EPHESUS_EVENTS['timothy_recruitment'] as GameEvent);
+      }
+      
+      if (this.currentCity.currentTurn >= 3 && !this.eventHistory.includes('sceva_sons')) {
+        return { event: EPHESUS_EVENTS['sceva_sons'], message: '' };
+      }
+      
+      if (this.currentCity.currentTurn >= 4 && !this.eventHistory.includes('burning_scrolls')) {
+        return this.executeEvent(EPHESUS_EVENTS['burning_scrolls'] as GameEvent);
       }
     }
     
@@ -706,8 +750,8 @@ class GameEngine {
   }
 
   getGameStateDisplay(): string {
-    if (this.gameOver) {
-      if (this.victory) {
+    if (this.isGameOver) {
+      if (this.isVictory) {
         return '\n🏆 【游戏结束】你完成了所有城市的宣教使命！"那美好的仗我已经打过了..."';
       } else {
         return '\n💀 【游戏结束】你耗尽了体力或物资，无法继续旅程。请重新开始。';
@@ -737,8 +781,8 @@ class GameEngine {
 
   // 紧凑版游戏状态显示（用于交互模式）
   getCompactGameStateDisplay(): string {
-    if (this.gameOver) {
-      if (this.victory) {
+    if (this.isGameOver) {
+      if (this.isVictory) {
         return '\n🏆 【游戏结束】你完成了所有城市的宣教使命！"那美好的仗我已经打过了..."';
       } else {
         return '\n💀 【游戏结束】你耗尽了体力或物资，无法继续旅程。请重新开始。';
@@ -879,7 +923,7 @@ class GameEngine {
 
     const actionKeys: ActionType[] = ['preach', 'tentmaking', 'disciple', 'rest'];
 
-    while (!this.gameOver) {
+    while (!this.isGameOver) {
       await this.sleep(delay);
       
       const eventResult = this.triggerEvent();
@@ -931,7 +975,7 @@ class GameEngine {
 
     console.log(this.getGameStateDisplay());
     
-    if (this.victory) {
+    if (this.isVictory) {
       console.log(this.displayEvaluation());
     }
   }

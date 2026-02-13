@@ -200,10 +200,12 @@ async function handleDecisionEvent(game: GameEngine, event: DecisionEvent, quest
   while (!validDecision) {
     const decisionChoice = await question('\n请选择 > ');
     const choiceIndex = parseInt(decisionChoice.trim()) - 1;
-    if (choiceIndex === 0 || choiceIndex === 1) {
+    if (choiceIndex >= 0 && choiceIndex < event.choices.length) {
       const decisionResult = game.handleDecision(event.id, choiceIndex);
       console.log(decisionResult);
       validDecision = true;
+    } else {
+      console.log(`❌ 请输入 1-${event.choices.length}`);
     }
   }
 }
