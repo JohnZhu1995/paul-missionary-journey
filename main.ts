@@ -65,14 +65,16 @@ async function runInteractiveMode(): Promise<void> {
   game.initializeGame();
   game.startCity('Antioch');
 
-  let lastAction = '';
-  let lastCompanionResults: string[] = [];
+  let currentAction = '';
+  let companionTaskSummary = '';
 
   while (!game.isGameOver) {
     console.clear?.();
-    displayCompactStatus(game);
     
-    // 显示保罗行动选项
+    // 显示状态面板（带选项提示）
+    displayStatusWithAction(game, currentAction, companionTaskSummary);
+    
+    // 显示行动选项
     displayActionOptions();
     
     const actionChoice = await question('\n👤 为保罗选择行动 > ');
@@ -99,18 +101,30 @@ async function runInteractiveMode(): Promise<void> {
     }
 
     const action = ACTIONS[actionType];
-    lastAction = action.nameChinese;
+    currentAction = action.nameChinese;
     
     // 选择同工任务
     const companionActions = await assignCompanionTasks(game, question);
     
+    // 生成同工任务摘要
+    const taskNames: string[] = [];
+    for (const [companionId, task] of companionActions) {
+      const companion = game.companions.find(c => c.id === companionId);
+      if (companion) {
+        const taskInfo = COMPANION_TASKS[task];
+        taskNames.push(`${companion.nameChinese}:${taskInfo.nameChinese}`);
+      }
+    }
+    companionTaskSummary = taskNames.join(' ');
+    
     // 执行行动
     const result = game.handleAction(actionType, companionActions);
     
-    lastCompanionResults = result.split('\n').filter(line => line.includes('✅') || line.includes('❌') || line.includes('✉️'));
+    // 清除选项，显示结果
+    console.clear?.();
+    displayStatusWithAction(game, currentAction, companionTaskSummary);
     
-    // 显示结果
-    displayResult(lastAction, lastCompanionResults);
+    console.log('\n' + result);
 
     const eventResult = game.triggerEvent();
     if (eventResult.event) {
@@ -122,8 +136,8 @@ async function runInteractiveMode(): Promise<void> {
     }
 
     await question('\n按 Enter 继续下一回合...');
-    lastAction = '';
-    lastCompanionResults = [];
+    currentAction = '';
+    companionTaskSummary = '';
   }
 
   console.clear?.();
@@ -157,12 +171,15 @@ function formatEffect(effect: ResourceChange, isCost: boolean = false): string {
   return parts.length > 0 ? parts.join(' ') : '无';
 }
 
-function displayCompactStatus(game: GameEngine): void {
+function displayStatusWithAction(game: GameEngine, currentAction: string = '', companionTasks: string = ''): void {
   const p = game.player;
   const city = game.currentCity;
   
   console.log('\n╔═══════════════════════════════════════════════════════╗');
-  console.log(`║  📍 ${(city?.nameChinese || '').padEnd(8)}  │  第 ${city?.currentTurn || 1}/${city?.maxTurns || 5} 回合  ║`);
+  
+  // 第一行：城市信息 + 回合 + 当前行动
+  const actionText = currentAction ? ` → ${currentAction}` : '';
+  console.log(`║  📍 ${(city?.nameChinese || '').padEnd(8)}  │ ${String(city?.currentTurn || 1).padStart(2)}/${city?.maxTurns || 5}回合${actionText.padStart(20)}║`);
   console.log('╠═══════════════════════════════════════════════════════╣');
   console.log(`║  ❤️ 体力 ${String(p.stamina).padStart(3)}/100   🍞 物资 ${String(p.provision).padStart(3)}/150   ⛪ 稳定 ${String(p.stability).padStart(3)}/100`);
   console.log(`║  ✝️ 信心 ${String(p.faith).padStart(3)}/200   🔥 逼迫 ${String(p.persecution).padStart(3)}/100   ⭐ 名声 ${String(p.reputation).padStart(3)}/200`);
@@ -175,6 +192,11 @@ function displayCompactStatus(game: GameEngine): void {
         console.log(`║     ${c.nameChinese}[${c.specialtyName}] 💪${c.stamina} 😊${c.morale}%`);
       }
     });
+    
+    if (companionTasks) {
+      console.log('╠═══════════════════════════════════════════════════════╣');
+      console.log(`║  📋 任务: ${companionTasks}`);
+    }
   }
   console.log('╚═══════════════════════════════════════════════════════╝');
 }
@@ -222,21 +244,6 @@ function displayCompanionTaskOptions(): void {
     console.log(`║  [${idx + 1}] ${data.emoji} ${task.nameChinese.padEnd(2)}   消耗:${cost.padEnd(8)}  收益:${effect}`);
   });
   console.log('║  [0] 跳过（默认休息)');
-  console.log('╚═══════════════════════════════════════════════════════╝');
-}
-
-function displayResult(lastAction: string, companionResults: string[]): void {
-  console.log('\n╔═══════════════════════════════════════════════════════╗');
-  console.log('║  📝 执行结果:                                         ║');
-  console.log('╠═══════════════════════════════════════════════════════╣');
-  console.log(`║  👤 保罗: ${lastAction}`);
-  if (companionResults.length > 0) {
-    console.log('║  👥 同工:');
-    companionResults.forEach(r => {
-      const trimmed = r.replace('✅ ', '').replace('❌ ', '').replace('✉️ ', '').substring(0, 40);
-      console.log(`║      ${trimmed}`);
-    });
-  }
   console.log('╚═══════════════════════════════════════════════════════╝');
 }
 
