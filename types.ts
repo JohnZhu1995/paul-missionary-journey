@@ -4,7 +4,7 @@
 // ============================================
 
 type ResourceChange = {
-  faith?: number;
+  spirit?: number;
   stamina?: number;
   reputation?: number;
   churches?: number;
@@ -124,14 +124,14 @@ interface Companion {
   nameChinese: string;
   stamina: number;
   maxStamina: number;
-  morale: number;
+  spirit: number; // 灵力（个人资源）
+  maxSpirit: number;
   specialty: SpecialtyType;
   specialtyName: string;
   specialtyDescription: string;
   isActive: boolean;
   currentTask: CompanionTaskType | null;
   applySpecialtyEffect(action: ActionType): ResourceChange;
-  getEfficiency(): number;
   assignTask(task: CompanionTaskType): {
     success: boolean;
     message: string;

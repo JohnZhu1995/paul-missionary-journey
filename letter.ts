@@ -22,7 +22,7 @@ class LetterSystem {
     this.cityLetterEffects.set("Antioch", [
       {
         cityId: "Antioch",
-        effect: { faith: 20, reputation: 10, stability: 15 },
+        effect: { spirit: 20, reputation: 10, stability: 15 },
         description: "Epistle to Antioch",
       },
     ]);
@@ -30,7 +30,7 @@ class LetterSystem {
     this.cityLetterEffects.set("Philippi", [
       {
         cityId: "Philippi",
-        effect: { faith: 25, reputation: 15, disciples: 2, stability: 10 },
+        effect: { spirit: 25, reputation: 15, disciples: 2, stability: 10 },
         description: "Epistle to Philippians",
       },
     ]);
@@ -38,7 +38,7 @@ class LetterSystem {
     this.cityLetterEffects.set("Ephesus", [
       {
         cityId: "Ephesus",
-        effect: { faith: 30, reputation: 20, churches: 1, stability: 20 },
+        effect: { spirit: 30, reputation: 20, churches: 1, stability: 20 },
         description: "Epistle to Ephesians",
       },
     ]);
@@ -47,7 +47,8 @@ class LetterSystem {
   canWriteLetter(cityId: string, team: Team): boolean {
     if (this.epistleCollection.get(cityId)) return false;
     if (team.disciples < 3) return false;
-    if (team.faith < 30) return false;
+    // 灵力现在是领导者个人资源
+    if (!team.leader || team.leader.spirit < 30) return false;
     return true;
   }
 
@@ -63,7 +64,7 @@ class LetterSystem {
     this.letterScore += 50;
 
     const effects = this.cityLetterEffects.get(cityId);
-    const effect = effects ? effects[0].effect : { faith: 15, reputation: 10 };
+    const effect = effects ? effects[0].effect : { spirit: 15, reputation: 10 };
 
     return {
       success: true,
@@ -101,48 +102,6 @@ class LetterSystem {
     }
 
     return output;
-  }
-
-  // 紧凑单行格式
-  getCompactCollectionStatus(): string {
-    const possibleLetters = [
-      { cityId: "Antioch", city: "安" },
-      { cityId: "Philippi", city: "腓" },
-      { cityId: "Ephesus", city: "以" },
-    ];
-
-    let letterBar = "";
-    let collected = 0;
-
-    for (const letter of possibleLetters) {
-      const isCollected = this.epistleCollection.get(letter.cityId);
-      if (isCollected) {
-        letterBar += `[✓${letter.city}]`;
-        collected++;
-      } else {
-        letterBar += `[○${letter.city}]`;
-      }
-    }
-
-    return `📚 书信: ${letterBar} (${collected}/${possibleLetters.length})`;
-  }
-
-  // 超紧凑格式（仅显示进度条）
-  getUltraCompactStatus(): string {
-    const possibleLetters = ["Antioch", "Philippi", "Ephesus"];
-    let collected = 0;
-    let letterBar = "";
-
-    for (const cityId of possibleLetters) {
-      if (this.epistleCollection.get(cityId)) {
-        letterBar += "✓";
-        collected++;
-      } else {
-        letterBar += "○";
-      }
-    }
-
-    return `📚 [${letterBar}] ${collected}/${possibleLetters.length}`;
   }
 
   applyLetterEffectsToCity(cityId: string): ResourceChange {

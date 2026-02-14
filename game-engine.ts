@@ -92,7 +92,7 @@ class GameEngine {
       "巴拿巴",
       "counselor",
       "劝慰者",
-      "提升探访效率和士气恢复",
+      "提升探访效果和士气恢复",
     );
     const silas = new Companion(
       "silas",
@@ -145,12 +145,12 @@ class GameEngine {
   }
 
   getActiveCompanions(): Companion[] {
-    return this.companions.filter((c) => c.morale >= 20 && c.stamina > 0);
+    return this.companions.filter((c) => c.spirit >= 20 && c.stamina > 0);
   }
 
   hasScribeCompanion(): boolean {
     return this.companions.some(
-      (c) => c.specialty === "scribe" && c.morale >= 20,
+      (c) => c.specialty === "scribe" && c.spirit >= 20,
     );
   }
 
@@ -182,6 +182,9 @@ class GameEngine {
     return true;
   }
 
+  // 存储最后触发的事件（用于显示）
+  private lastTriggeredEvent: { name: string; description: string; text: string; effect: ResourceChange } | null = null;
+
   triggerCityEvent(cityId: string): void {
     let events: (GameEvent | DecisionEvent)[] = [];
 
@@ -201,6 +204,19 @@ class GameEngine {
       const randomEvent = events[Math.floor(Math.random() * events.length)];
       if (randomEvent.type === "event") {
         const event = randomEvent as GameEvent;
+        
+        // 避免重复触发：检查事件历史
+        if (this.eventHistory.includes(event.id)) {
+          return;
+        }
+        
+        this.eventHistory.push(event.id);
+        this.lastTriggeredEvent = {
+          name: event.name,
+          description: event.description,
+          text: event.text || event.description,
+          effect: event.effect,
+        };
         this.addToLog(`【事件】${event.name}: ${event.description}`);
 
         // 自动选择第一个选项
@@ -208,6 +224,52 @@ class GameEngine {
         this.addToLog(`影响: ${JSON.stringify(event.effect)}`);
       }
     }
+  }
+
+  // 获取事件面板显示
+  getEventDisplay(): string {
+    if (!this.lastTriggeredEvent) return "";
+
+    const event = this.lastTriggeredEvent;
+    const effect = event.effect;
+    const effects: string[] = [];
+    
+    if (effect.reputation) effects.push(`${effect.reputation > 0 ? "+" : ""}${effect.reputation} 名声`);
+    if (effect.spirit) effects.push(`${effect.spirit > 0 ? "+" : ""}${effect.spirit} 灵力`);
+    if (effect.morale) effects.push(`${effect.morale > 0 ? "+" : ""}${effect.morale} 士气`);
+    if (effect.provision) effects.push(`${effect.provision > 0 ? "+" : ""}${effect.provision} 物资`);
+    if (effect.stability) effects.push(`${effect.stability > 0 ? "+" : ""}${effect.stability} 稳定`);
+    if (effect.persecution) effects.push(`${effect.persecution > 0 ? "+" : ""}${effect.persecution} 逼迫`);
+    if (effect.disciples) effects.push(`${effect.disciples > 0 ? "+" : ""}${effect.disciples} 门徒`);
+    if (effect.churches) effects.push(`${effect.churches > 0 ? "+" : ""}${effect.churches} 教会`);
+
+    let display = "\n";
+    display += "╔═══════════════════════════════════════════════════════╗\n";
+    display += "║  📜 事件触发                                      ║\n";
+    display += "╠═══════════════════════════════════════════════════════╣\n";
+    display += `║  【${event.name}】\n`;
+    display += "╠═══════════════════════════════════════════════════════╣\n";
+    display += `║  ${event.text.padEnd(46)}\n`;
+    display += "╠═══════════════════════════════════════════════════════╣\n";
+    display += `║  📊 影响：${effects.join("， ").padEnd(32)}║\n`;
+    display += "╚═══════════════════════════════════════════════════════╝";
+
+    return display;
+  }
+
+  // 清除事件显示
+  clearEventDisplay(): void {
+    this.lastTriggeredEvent = null;
+  }
+
+  // 设置事件用于显示（供外部调用）
+  setLastEventForDisplay(name: string, description: string, text: string, effect: ResourceChange): void {
+    this.lastTriggeredEvent = { name, description, text, effect };
+  }
+
+  // 检查是否有待显示的事件
+  hasEventToDisplay(): boolean {
+    return this.lastTriggeredEvent !== null;
   }
 
   performAction(actionType: ActionType): { success: boolean; message: string } {
@@ -273,9 +335,9 @@ class GameEngine {
       return `资源不足，无法执行「${action.name}」`;
     }
 
-    // 记录行动前的资源状态
+    // 记录行动前的资源状态（包括所有成员体力）
     const prevResources = {
-      faith: this.team.faith,
+      morale: this.team.morale,
       provision: this.team.provision,
       stability: this.team.stability,
       persecution: this.team.persecution,
@@ -283,7 +345,15 @@ class GameEngine {
       disciples: this.team.disciples,
       churches: this.team.churches,
       leaderStamina: this.team.leader?.stamina || 0,
+      leaderSpirit: this.team.leader?.spirit || 0,
+      memberStamina: new Map<string, number>(),
+      memberSpirit: new Map<string, number>(),
     };
+    // 记录所有成员的体力和灵力前值
+    for (const member of this.team.members) {
+      prevResources.memberStamina.set(member.nameChinese, member.stamina);
+      prevResources.memberSpirit.set(member.nameChinese, member.spirit);
+    }
 
     // 记录各成员的体力变化来源
     const staminaChanges: Map<string, { name: string; change: number }[]> = new Map();
@@ -308,14 +378,15 @@ class GameEngine {
     // 保罗行动的变化
     const paulChanges: { resource: string; value: number; isCost: boolean }[] = [];
     if (action.cost.stamina) paulChanges.push({ resource: "stamina", value: action.cost.stamina, isCost: true });
-    if (action.cost.faith) paulChanges.push({ resource: "faith", value: action.cost.faith, isCost: true });
+    if (action.cost.spirit) paulChanges.push({ resource: "spirit", value: action.cost.spirit, isCost: true });
     if (action.cost.provision) paulChanges.push({ resource: "provision", value: action.cost.provision, isCost: true });
+    if (action.cost.morale) paulChanges.push({ resource: "morale", value: action.cost.morale, isCost: true });
     for (const [key, val] of Object.entries(action.effect)) {
       if (val && val > 0) paulChanges.push({ resource: key, value: val, isCost: false });
     }
     resourceChanges.push({
       provider: this.team.leader?.nameChinese || "保罗",
-      emoji: "👤",
+      emoji: this.team.leader?.avatarEmoji || "🎙️",
       changes: paulChanges,
     });
 
@@ -338,7 +409,7 @@ class GameEngine {
             companionResults.push(`✅ ${result.message}`);
             resourceChanges.push({
               provider: companion.nameChinese,
-              emoji: "👥",
+              emoji: companion.avatarEmoji,
               changes: companionChange,
             });
           } else {
@@ -352,8 +423,13 @@ class GameEngine {
     if (action.cost.stamina && this.team.leader) {
       this.team.leader.stamina -= action.cost.stamina;
     }
-    if (action.cost.faith) {
-      this.team.faith -= action.cost.faith;
+    // 灵力现在是领导者个人资源
+    if (action.cost.spirit && this.team.leader) {
+      this.team.leader.spirit -= action.cost.spirit;
+    }
+    // 士气是团队资源
+    if (action.cost.morale) {
+      this.team.morale -= action.cost.morale;
     }
     if (action.cost.provision) {
       this.team.provision -= action.cost.provision;
@@ -381,8 +457,8 @@ class GameEngine {
     this.currentCity?.nextRound();
     this.currentTurn++;
 
-    // 回合结束结算
-    this.endOfRoundSettlement();
+    // 回合结束结算（传入 resourceChanges 以记录城市固有逼迫增长）
+    this.endOfRoundSettlement(resourceChanges);
 
     // 追踪教会健康度变化
     const stabilityLoss = prevStability - this.team.stability;
@@ -407,7 +483,7 @@ class GameEngine {
     action: (typeof ACTIONS)["preach"],
     companionResults: string[],
     prevResources: {
-      faith: number;
+      morale: number;
       provision: number;
       stability: number;
       persecution: number;
@@ -415,6 +491,9 @@ class GameEngine {
       disciples: number;
       churches: number;
       leaderStamina: number;
+      leaderSpirit: number;
+      memberStamina: Map<string, number>;
+      memberSpirit: Map<string, number>;
     },
     resourceChanges: {
       provider: string;
@@ -428,9 +507,8 @@ class GameEngine {
       result += "\n" + companionResults.join("\n");
     }
     result += `\n${this.team.getStatus(prevResources, resourceChanges)}`;
-    if (this.currentCity) {
-      result += `\n📍 当前位置: ${this.currentCity.getRoundInfo()}`;
-    }
+    // 注意：不在这里显示位置信息，因为回合已经推进
+    // 位置信息会在主循环中按Enter后显示
     return result;
   }
 
@@ -443,7 +521,12 @@ class GameEngine {
     ) {
       return false;
     }
-    if (cost.faith && this.team.faith < cost.faith) {
+    // 灵力现在是领导者个人资源
+    if (cost.spirit && this.team.leader && this.team.leader.spirit < cost.spirit) {
+      return false;
+    }
+    // 士气是团队资源
+    if (cost.morale && this.team.morale < cost.morale) {
       return false;
     }
     if (cost.provision && this.team.provision < cost.provision) {
@@ -452,15 +535,25 @@ class GameEngine {
     return true;
   }
 
-  private endOfRoundSettlement(): void {
+  private endOfRoundSettlement(resourceChanges?: { provider: string; emoji: string; changes: { resource: string; value: number; isCost: boolean }[] }[]): void {
     if (this.currentCity) {
       // 追踪累计逼迫值
       this.totalPersecutionReceived += this.currentCity.basePersecutionRate;
 
       // 城市固有的逼迫增长
+      const cityPersecutionIncrease = this.currentCity.basePersecutionRate;
       this.team.applyEffects({
-        persecution: this.currentCity.basePersecutionRate,
+        persecution: cityPersecutionIncrease,
       });
+
+      // 记录城市固有逼迫增长到 resourceChanges
+      if (resourceChanges && cityPersecutionIncrease > 0) {
+        resourceChanges.push({
+          provider: this.currentCity.nameChinese,
+          emoji: "🏙️",
+          changes: [{ resource: "persecution", value: cityPersecutionIncrease, isCost: false }],
+        });
+      }
 
       // 以弗所特殊机制
       if (this.currentCity.name === "Ephesus" && this.tyrannusMode) {
@@ -579,7 +672,7 @@ class GameEngine {
     if (!this.letterSystem.canWriteLetter(this.currentCity.id, this.team)) {
       return {
         success: false,
-        message: "条件不满足（需要至少3名门徒和30信心值）",
+        message: "条件不满足（需要至少3名门徒和30灵力值）",
       };
     }
 
@@ -605,7 +698,7 @@ class GameEngine {
 
     // 奖励
     const bonus: ResourceChange = {
-      faith: 20,
+      spirit: 20,
       reputation: 10,
     };
 
@@ -648,10 +741,10 @@ class GameEngine {
     }
 
     // 检查失败条件
-    if (this.team.faith <= 0) {
+    if (this.team.leader && this.team.leader.spirit <= 0) {
       this.isGameOver = true;
       this.isVictory = false;
-      this.addToLog("游戏结束：信心耗尽...");
+      this.addToLog("游戏结束：灵力耗尽...");
       return;
     }
 
@@ -808,7 +901,7 @@ class GameEngine {
       );
     if (event.effect.morale)
       changes.push(
-        `同工士气 ${event.effect.morale > 0 ? "+" : ""}${event.effect.morale}`,
+        `团队士气 ${event.effect.morale > 0 ? "+" : ""}${event.effect.morale}`,
       );
 
     if (changes.length > 0) {
@@ -874,7 +967,7 @@ class GameEngine {
       );
     if (choice.effect.morale)
       changes.push(
-        `同工士气 ${choice.effect.morale > 0 ? "+" : ""}${choice.effect.morale}`,
+        `团队士气 ${choice.effect.morale > 0 ? "+" : ""}${choice.effect.morale}`,
       );
 
     if (changes.length > 0) {
@@ -1035,50 +1128,6 @@ class GameEngine {
     return state;
   }
 
-  // 紧凑版游戏状态显示（用于交互模式）
-  getCompactGameStateDisplay(): string {
-    if (this.isGameOver) {
-      if (this.isVictory) {
-        return '\n🏆 【游戏结束】你完成了所有城市的宣教使命！"那美好的仗我已经打过了..."';
-      } else {
-        return "\n💀 【游戏结束】你耗尽了体力或物资，无法继续旅程。请重新开始。";
-      }
-    }
-
-    let state = this.team.getCompactStatus();
-
-    // 添加当前位置和回合信息
-    if (this.currentCity) {
-      const currentTurn = this.currentCity.currentTurn || 1;
-      const maxTurns = this.currentCity.maxTurns || 5;
-      state += `\n📍 当前: ${this.currentCity.nameChinese} (第 ${currentTurn}/${maxTurns} 回合)`;
-    }
-
-    // 显示同工团队（紧凑单行）
-    if (this.companions.length > 0) {
-      const companionStr = this.companions
-        .filter((c) => c.isActive)
-        .map((c) => c.getUltraCompactStatus())
-        .join(" | ");
-      if (companionStr) {
-        state += `\n👥 同工: ${companionStr}`;
-      }
-    }
-
-    // 显示书信收集（紧凑）
-    state += "\n" + this.letterSystem.getCompactCollectionStatus();
-
-    // 显示最近事件
-    if (this.eventHistory.length > 0) {
-      const recentEvents = this.eventHistory.slice(-3);
-      state += "\n📜 最近: " + recentEvents.join(" | ");
-    }
-
-    state += "\n" + this.getCompactAvailableActions();
-
-    return state;
-  }
-
   // 获取最近的事件日志（用于显示区域）
   getRecentEvents(count: number = 3): string[] {
     return this.gameLog.slice(-count);
@@ -1100,78 +1149,6 @@ class GameEngine {
     });
 
     return output;
-  }
-
-  // 紧凑版行动选项
-  getCompactAvailableActions(): string {
-    const actions: ActionType[] = [
-      "preach",
-      "tentmaking",
-      "disciple",
-      "rest",
-      "write_letter",
-    ];
-    const emojis = ["📢", "🏕️", "👥", "😴", "✉️"];
-
-    let output = "\n🎯 行动: ";
-    const actionDisplays: string[] = [];
-
-    actions.forEach((key, index) => {
-      const action = ACTIONS[key];
-      const effects: string[] = [];
-
-      // 收集正效果
-      if (action.effect.stability && action.effect.stability > 0)
-        effects.push(`+${action.effect.stability}健`);
-      if (action.effect.provision && action.effect.provision > 0)
-        effects.push(`+${action.effect.provision}物`);
-      if (action.effect.stamina && action.effect.stamina > 0)
-        effects.push(`+${action.effect.stamina}体`);
-      if (action.effect.faith && action.effect.faith > 0)
-        effects.push(`+${action.effect.faith}信`);
-      if (action.effect.reputation && action.effect.reputation > 0)
-        effects.push(`+${action.effect.reputation}声`);
-      if (action.effect.disciples && action.effect.disciples > 0)
-        effects.push(`+${action.effect.disciples}徒`);
-
-      // 收集负效果
-      if (action.effect.stability && action.effect.stability < 0)
-        effects.push(`${action.effect.stability}健`);
-      if (action.effect.provision && action.effect.provision < 0)
-        effects.push(`${action.effect.provision}物`);
-      if (action.effect.stamina && action.effect.stamina < 0)
-        effects.push(`${action.effect.stamina}体`);
-      if (action.effect.persecution && action.effect.persecution > 0)
-        effects.push(`+${action.effect.persecution}逼`);
-
-      actionDisplays.push(
-        `[${index + 1}${action.nameChinese.substring(0, 2)}${emojis[index]}${effects.length > 0 ? effects.join("/") : ""}]`,
-      );
-    });
-
-    output += actionDisplays.join(" ");
-    output += " [q退出]";
-
-    return output;
-  }
-
-  // 超紧凑版行动选项（仅显示编号和名称）
-  getUltraCompactActions(): string {
-    const actions: ActionType[] = [
-      "preach",
-      "tentmaking",
-      "disciple",
-      "rest",
-      "write_letter",
-    ];
-    const emojis = ["📢", "🏕️", "👥", "😴", "✉️"];
-
-    const actionDisplays = actions.map((key, index) => {
-      const action = ACTIONS[key];
-      return `[${index + 1}]${action.nameChinese.substring(0, 2)}${emojis[index]}`;
-    });
-
-    return "🎯 " + actionDisplays.join(" ") + " [q]退出";
   }
 
   addToLog(message: string): void {
@@ -1253,7 +1230,7 @@ class GameEngine {
       // AI分配同工任务（简化版）
       const companionActions = new Map<string, CompanionTaskType>();
       this.companions.forEach((companion) => {
-        if (companion.stamina > 20 && companion.morale >= 40) {
+        if (companion.stamina > 20 && companion.spirit >= 40) {
           if (this.team.stability < 40) {
             companionActions.set(companion.id, "teach");
           } else if (this.team.persecution > 50) {

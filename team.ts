@@ -21,7 +21,7 @@ class Team {
   reputation: number; // 团队名声
   churches: number; // 团队教会
   disciples: number; // 团队门徒
-  faith: number; // 信心值
+  morale: number; // 团队士气值
 
   // 其他
   visitedCities: string[];
@@ -31,7 +31,7 @@ class Team {
     this.leader = null; // 稍后在GameEngine中初始化
     this.members = [];
 
-    this.faith = INITIAL_RESOURCES.faith || 100;
+    this.morale = INITIAL_RESOURCES.morale || 50;
     this.reputation = INITIAL_RESOURCES.reputation || 50;
     this.churches = INITIAL_RESOURCES.churches || 0;
     this.disciples = INITIAL_RESOURCES.disciples || 0;
@@ -89,53 +89,70 @@ class Team {
     // 领导者体力消耗检查
     if (cost.stamina && this.leader && this.leader.stamina < cost.stamina)
       return false;
-    if (cost.faith && this.faith < cost.faith) return false;
+    // 领导者灵力消耗检查（灵力现在是个人资源）
+    if (cost.spirit && this.leader && this.leader.spirit < cost.spirit)
+      return false;
     if (cost.reputation && this.reputation < cost.reputation) return false;
     if (cost.disciples && this.disciples < cost.disciples) return false;
     if (cost.provision && this.provision < cost.provision) return false;
+    // 团队士气消耗检查
+    if (cost.morale && this.morale < cost.morale) return false;
 
     // 应用消耗
     if (cost.stamina && this.leader) this.leader.stamina -= cost.stamina;
-    if (cost.faith) this.faith -= cost.faith;
+    // 灵力从领导者个人扣除
+    if (cost.spirit && this.leader) this.leader.spirit -= cost.spirit;
     if (cost.reputation) this.reputation -= cost.reputation;
     if (cost.disciples) this.disciples -= cost.disciples;
     if (cost.provision) this.provision -= cost.provision;
+    // 士气从团队扣除
+    if (cost.morale) this.morale -= cost.morale;
 
     return true;
   }
 
   applyEffects(effect: ResourceChange): void {
-    // 领导者个人属性
+    // 团队士气对正面效果的加成（士气高时效果+20%，士气低时-20%）
+    const moraleModifier = (this.morale - 50) / 250; // -0.2 到 +0.2
+
+    const applyModifier = (value: number | undefined): number => {
+      if (value === undefined) return 0;
+      if (value > 0) return Math.round(value * (1 + moraleModifier));
+      return value; // 负面效果不加成
+    };
+
+    // 领导者个人属性（体力、灵力）
     if (this.leader) {
       if (effect.stamina !== undefined)
         this.leader.stamina = Math.min(
           this.leader.stamina + effect.stamina,
           this.leader.maxStamina,
         );
-      if (effect.morale !== undefined)
-        this.leader.morale = Math.min(
-          Math.max(this.leader.morale + effect.morale, 0),
-          100,
+      // 灵力现在是个人资源
+      if (effect.spirit !== undefined)
+        this.leader.spirit = Math.min(
+          Math.max(this.leader.spirit + effect.spirit, 0),
+          200,
         );
     }
 
-    // 团队级别资源
-    if (effect.faith !== undefined)
-      this.faith = Math.min(this.faith + effect.faith, 200);
+    // 团队级别资源（应用士气加成）
+    if (effect.morale !== undefined)
+      this.morale = Math.min(Math.max(this.morale + effect.morale, 0), 100);
     if (effect.reputation !== undefined)
-      this.reputation = Math.min(this.reputation + effect.reputation, 200);
-    if (effect.churches !== undefined) this.churches += effect.churches;
-    if (effect.disciples !== undefined) this.disciples += effect.disciples;
+      this.reputation = Math.min(this.reputation + applyModifier(effect.reputation), 200);
+    if (effect.churches !== undefined) this.churches += applyModifier(effect.churches);
+    if (effect.disciples !== undefined) this.disciples += applyModifier(effect.disciples);
     if (effect.provision !== undefined)
-      this.provision = Math.min(this.provision + effect.provision, 150);
+      this.provision = Math.min(this.provision + applyModifier(effect.provision), 150);
     if (effect.stability !== undefined)
       this.stability = Math.min(
-        Math.max(this.stability + effect.stability, 0),
+        Math.max(this.stability + applyModifier(effect.stability), 0),
         100,
       );
     if (effect.persecution !== undefined)
       this.persecution = Math.min(
-        Math.max(this.persecution + effect.persecution, 0),
+        Math.max(this.persecution + effect.persecution, 0), // 逼迫不受士气影响
         100,
       );
   }
@@ -146,8 +163,9 @@ class Team {
         this.leader.stamina + 30,
         this.leader.maxStamina,
       );
+      // 休息恢复灵力（个人资源）
+      this.leader.spirit = Math.min(this.leader.spirit + 15, 200);
     }
-    this.faith = Math.min(this.faith + 15, 200);
 
     // 恢复所有团队成员体力
     for (const member of this.getAllMembers()) {
@@ -165,7 +183,7 @@ class Team {
 
   getStatus(
     prevResources?: {
-      faith: number;
+      morale: number;
       provision: number;
       stability: number;
       persecution: number;
@@ -173,6 +191,9 @@ class Team {
       disciples: number;
       churches: number;
       leaderStamina: number;
+      leaderSpirit: number;
+      memberStamina?: Map<string, number>;
+      memberSpirit?: Map<string, number>;
     },
     resourceChanges?: {
       provider: string;
@@ -188,14 +209,17 @@ class Team {
       return ` ↓${Math.abs(diff)}${emojiStr}`;
     };
 
-    const getResourceEmojis = (resourceKey: string): string[] => {
+    const getResourceEmojis = (resourceKey: string, providerName?: string): string[] => {
       if (!resourceChanges) return [];
       const emojis: string[] = [];
       for (const rc of resourceChanges) {
+        // 如果指定了 providerName，只收集该提供者的 emoji
+        if (providerName && rc.provider !== providerName) continue;
         for (const change of rc.changes) {
           const keyMap: Record<string, string> = {
             stamina: "stamina",
-            faith: "faith",
+            spirit: "spirit",
+            morale: "morale",
             provision: "provision",
             stability: "stability",
             persecution: "persecution",
@@ -215,31 +239,41 @@ class Team {
     status += "║  🎯 行动果效                                      ║\n";
     status += "╠═══════════════════════════════════════════════════════╣\n";
 
+    // 显示领导者（显示体力和灵力 - 都是个人资源）
     if (this.leader) {
-      const staminaEmojis = getResourceEmojis("stamina");
+      const staminaEmojis = getResourceEmojis("stamina", this.leader.nameChinese);
+      const spiritEmojis = getResourceEmojis("spirit", this.leader.nameChinese);
       const staminaChange = prevResources ? formatChange(this.leader.stamina, prevResources.leaderStamina, staminaEmojis) : "";
-      status += `║  保罗: ${this.leader.nameChinese}[${this.leader.specialtyName}] 💪${this.leader.stamina}/${this.leader.maxStamina}${staminaChange}  😊${this.leader.morale}%\n`;
+      const spiritChange = prevResources ? formatChange(this.leader.spirit, prevResources.leaderSpirit, spiritEmojis) : "";
+      status += `║  ${this.leader.avatarEmoji} ${this.leader.nameChinese}[${this.leader.specialtyName}] 💪${this.leader.stamina}/${this.leader.maxStamina}${staminaChange}  ✝️${this.leader.spirit}/${this.leader.maxSpirit}${spiritChange}\n`;
     }
 
-    // 显示其他同工
+    // 显示其他同工（显示体力和灵力）
     if (this.members.length > 0) {
       for (const member of this.members) {
-        status += `║  ${member.nameChinese}[${member.specialtyName}] 💪${member.stamina}/${member.maxStamina}  😊${member.morale}%\n`;
+        const memberStaminaEmojis = getResourceEmojis("stamina", member.nameChinese);
+        const memberSpiritEmojis = getResourceEmojis("spirit", member.nameChinese);
+        const prevStamina = prevResources?.memberStamina?.get(member.nameChinese) ?? member.stamina;
+        const prevSpirit = prevResources?.memberSpirit?.get(member.nameChinese) ?? member.spirit;
+        const staminaChange = prevResources ? formatChange(member.stamina, prevStamina, memberStaminaEmojis) : "";
+        const spiritChange = prevResources ? formatChange(member.spirit, prevSpirit, memberSpiritEmojis) : "";
+        status += `║  ${member.avatarEmoji} ${member.nameChinese}[${member.specialtyName}] 💪${member.stamina}/${member.maxStamina}${staminaChange}  ✝️${member.spirit}/${member.maxSpirit}${spiritChange}\n`;
       }
     }
 
     status += "╠═══════════════════════════════════════════════════════╣\n";
     status += "║  团队:\n";
     
+    // 显示团队资源（士气是团队资源）
     if (prevResources && resourceChanges) {
       status += `║  🍞 物资    ${this.provision.toString().padStart(3)}/150${formatChange(this.provision, prevResources.provision, getResourceEmojis("provision"))}   ⛪ 稳定     ${this.stability.toString().padStart(3)}/100${formatChange(this.stability, prevResources.stability, getResourceEmojis("stability"))}\n`;
       status += `║  🔥 逼迫    ${this.persecution.toString().padStart(3)}/100${formatChange(this.persecution, prevResources.persecution, getResourceEmojis("persecution"))}   ⭐ 名声     ${this.reputation.toString().padStart(3)}/200${formatChange(this.reputation, prevResources.reputation, getResourceEmojis("reputation"))}\n`;
-      status += `║  ✝️ 信心    ${this.faith.toString().padStart(3)}/200${formatChange(this.faith, prevResources.faith, getResourceEmojis("faith"))}   👥 门徒     ${this.disciples.toString().padStart(3)}${formatChange(this.disciples, prevResources.disciples, getResourceEmojis("disciples"))}\n`;
+      status += `║  😊 士气    ${this.morale.toString().padStart(3)}/100${formatChange(this.morale, prevResources.morale, getResourceEmojis("morale"))}   👥 门徒     ${this.disciples.toString().padStart(3)}${formatChange(this.disciples, prevResources.disciples, getResourceEmojis("disciples"))}\n`;
       status += `║  ⛪ 教会      ${this.churches.toString().padStart(3)}${formatChange(this.churches, prevResources.churches, getResourceEmojis("churches"))}\n`;
     } else {
       status += `║  🍞 物资    ${this.provision.toString().padStart(3)}/150   ⛪ 稳定     ${this.stability.toString().padStart(3)}/100\n`;
       status += `║  🔥 逼迫    ${this.persecution.toString().padStart(3)}/100   ⭐ 名声     ${this.reputation.toString().padStart(3)}/200\n`;
-      status += `║  ✝️ 信心    ${this.faith.toString().padStart(3)}/200   👥 门徒     ${this.disciples.toString().padStart(3)}\n`;
+      status += `║  😊 士气    ${this.morale.toString().padStart(3)}/100   👥 门徒     ${this.disciples.toString().padStart(3)}\n`;
       status += `║  ⛪ 教会      ${this.churches.toString().padStart(3)}\n`;
     }
     status += "╚═══════════════════════════════════════════════════════╝";
@@ -257,38 +291,21 @@ class Team {
     stability: string;
     persecution: string;
     reputation: string;
-    faith: string;
+    morale: string;
+    disciples: number;
   } {
     return {
       leaderStamina: this.leader
         ? `${this.leader.stamina}/${this.leader.maxStamina}`
         : "0/100",
-      leaderMorale: this.leader ? this.leader.morale : 0,
+      leaderMorale: 0, // 现在士气是团队资源，这里保留兼容
       provision: `${this.provision}/150`,
       stability: `${this.stability}/100`,
       persecution: `${this.persecution}/100`,
       reputation: `${this.reputation}/200`,
-      faith: `${this.faith}/200`,
+      morale: `${this.morale}/100`,
+      disciples: this.disciples,
     };
-  }
-
-  /**
-   * 紧凑格式状态显示（单行）
-   */
-  getCompactStatus(): string {
-    if (!this.leader) return "领导未初始化";
-
-    const faithBar = this.getProgressBar(this.faith, 200, 10);
-    const staminaBar = this.getProgressBar(this.leader.stamina, 100, 10);
-    const repBar = this.getProgressBar(this.reputation, 200, 10);
-    const provBar = this.getProgressBar(this.provision, 150, 10);
-    const stabBar = this.getProgressBar(this.stability, 100, 10);
-    const persBar = this.getProgressBar(this.persecution, 100, 10);
-
-    const line1 = `┌─ 团队 ─┬─ 信心:${faithBar} ${this.faith.toString().padStart(3)}/200 ─┬─ 体力:${staminaBar} ${this.leader.stamina.toString().padStart(3)}/100 ─┬─ 声望:${repBar} ${this.reputation.toString().padStart(3)}/200 ─┐`;
-    const line2 = `└─ 教会:${this.churches.toString().padStart(2)} ─┴─ 门徒:${this.disciples.toString().padStart(3)} ─┴─ 物资:${provBar} ${this.provision.toString().padStart(3)}/150 ─┴─ 稳定:${stabBar} ${this.stability.toString().padStart(3)}/100 ─┴─ 逼迫:${persBar} ${this.persecution.toString().padStart(3)}/100 ─┘`;
-
-    return `${line1}\n${line2}`;
   }
 
   private getProgressBar(value: number, max: number, width: number): string {

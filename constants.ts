@@ -6,15 +6,14 @@
 import { ResourceChange, ActionType, CompanionTaskType, Action } from './types.js';
 
 const INITIAL_RESOURCES: ResourceChange = {
-  faith: 100,
-  stamina: 100,
-  reputation: 50,
-  churches: 0,
-  disciples: 0,
   provision: 100,
   stability: 50,
   persecution: 0,
-  morale: 80,
+  reputation: 50,
+  churches: 0,
+  disciples: 0,
+  morale: 50, // 团队士气（原为个人士气）
+  // spirit 现在为个人资源，在 Companion 中初始化
 };
 
 const CITY_CONFIG: Record<string, { name: string; nameChinese: string; difficulty: number; rounds: number; basePersecutionRate: number; maxTurns: number; description: string }> = {
@@ -53,7 +52,7 @@ const ACTIONS: Record<ActionType, Action> = {
     name: 'Preach Gospel',
     nameChinese: '传扬福音',
     description: '向城中居民宣讲福音，建立教会，增加信徒',
-    cost: { stamina: 20, faith: 5 },
+    cost: { stamina: 20, spirit: 5, morale: 10 },
     effect: { reputation: 10, disciples: 2, persecution: 10 },
   },
   tentmaking: {
@@ -62,14 +61,14 @@ const ACTIONS: Record<ActionType, Action> = {
     nameChinese: '织帐棚',
     description: '制作帐篷维生，恢复体力，维持基本生活',
     cost: { stamina: 10 },
-    effect: { stamina: 15, faith: 5, provision: 10 },
+    effect: { stamina: 15, spirit: 5, provision: 10 },
   },
   disciple: {
     id: 'disciple',
     name: 'Train Disciples',
     nameChinese: '训练门徒',
     description: '深入教导信徒，建立坚固的门徒，增加教会根基',
-    cost: { stamina: 15, faith: 10 },
+    cost: { stamina: 15, spirit: 10 },
     effect: { disciples: 3, reputation: 5, stability: 10 },
     minDisciples: 2,
   },
@@ -77,16 +76,16 @@ const ACTIONS: Record<ActionType, Action> = {
     id: 'rest',
     name: 'Rest',
     nameChinese: '安歇',
-    description: '休息祷告，恢复体力和信心',
+    description: '休息祷告，恢复体力和灵力',
     cost: {},
-    effect: { stamina: 30, faith: 15 },
+    effect: { stamina: 30, spirit: 15 },
   },
   write_letter: {
     id: 'write_letter',
     name: 'Write Epistle',
     nameChinese: '撰写书信',
     description: '为建立的教会撰写书信，留下属灵遗产',
-    cost: { stamina: 25, faith: 20 },
+    cost: { stamina: 25, spirit: 20, morale: 15 },
     effect: { reputation: 15 },
     requiresCompanion: true,
   },
@@ -112,7 +111,7 @@ const COMPANION_TASKS: Record<CompanionTaskType, { name: string; nameChinese: st
     nameChinese: '医治',
     description: '为人医病',
     staminaCost: 20,
-    effect: { reputation: 8, faith: 5 },
+    effect: { reputation: 8, spirit: 5 },
   },
   teach: {
     name: 'Teach',

@@ -68,6 +68,13 @@ async function runInteractiveMode(): Promise<void> {
   let companionTaskSummary = "";
 
   while (!game.isGameOver) {
+    // 检查是否有事件需要显示
+    if (game.hasEventToDisplay()) {
+      console.log(game.getEventDisplay());
+      await question("\n按 Enter 继续...");
+      game.clearEventDisplay();
+    }
+
     // 清屏：使用多行换行替代 console.clear（兼容性更好）
     console.log("\n".repeat(5));
 
@@ -122,6 +129,7 @@ async function runInteractiveMode(): Promise<void> {
 
     console.log("\n" + result);
 
+    // 触发回合事件并显示面板
     const eventResult = game.triggerEvent();
     if (eventResult.event) {
       if (eventResult.event.type === "decision") {
@@ -131,7 +139,11 @@ async function runInteractiveMode(): Promise<void> {
           question,
         );
       } else {
-        console.log(eventResult.message);
+        // 将事件存储到 lastTriggeredEvent 以使用面板显示
+        const event = eventResult.event as GameEvent;
+        game.setLastEventForDisplay(event.name, event.description, event.text || event.description, event.effect);
+        console.log(game.getEventDisplay());
+        game.clearEventDisplay();
       }
     }
 
@@ -159,7 +171,7 @@ function formatEffect(effect: ResourceChange, isCost: boolean = false): string {
   const prefix = isCost ? "-" : "+";
 
   if (effect.stamina) parts.push(`体${prefix}${Math.abs(effect.stamina)}`);
-  if (effect.faith) parts.push(`信${prefix}${Math.abs(effect.faith)}`);
+  if (effect.spirit) parts.push(`灵${prefix}${Math.abs(effect.spirit)}`);
   if (effect.provision) parts.push(`物${prefix}${Math.abs(effect.provision)}`);
   if (effect.reputation)
     parts.push(`声${prefix}${Math.abs(effect.reputation)}`);
@@ -190,6 +202,19 @@ function displayStatusWithAction(
   console.log(
     `║  📍 ${(city?.nameChinese || "").padEnd(8)}       │  ${String(city?.currentTurn || 1).padStart(2)}/${city?.maxTurns || 5}回合${" ".repeat(20)}║`,
   );
+  
+  // 城市被动 buff
+  if (city) {
+    const baseRate = city.basePersecutionRate;
+    let cityBuff = "";
+    if (baseRate > 0) {
+      cityBuff = `🔥 每回合+${baseRate}逼迫`;
+    }
+    if (cityBuff) {
+      console.log(`║  🏙️ 城市效果: ${cityBuff.padEnd(40)}║`);
+    }
+  }
+  
   console.log("╠═══════════════════════════════════════════════════════╣");
   console.log("║  团队状态:");
   console.log(
@@ -198,22 +223,30 @@ function displayStatusWithAction(
   console.log(
     `║  🔥 逼迫 ${status.persecution.padStart(10)}   ⭐ 名声 ${status.reputation.padStart(10)}`,
   );
+  console.log(
+    `║  😊 士气 ${status.morale.padStart(10)}   👥 门徒 ${String(team.disciples).padStart(10)}`,
+  );
 
   if (team.leader || (team.members && team.members.length > 0)) {
     console.log("╠═══════════════════════════════════════════════════════╣");
     console.log("║  团队:");
     
-    // 显示保罗（leader）
+    // 显示保罗（leader）- 显示体力和灵力（个人资源）
     if (team.leader) {
-      const leaderStatus = `${team.leader.nameChinese}[${team.leader.specialtyName}] 💪${team.leader.stamina}  😊${team.leader.morale}%`;
-      console.log(`║  保罗: ${leaderStatus}`);
+      const leaderStatus = `${team.leader.avatarEmoji} ${team.leader.nameChinese}[${team.leader.specialtyName}] 💪${team.leader.stamina}  ✝️${team.leader.spirit}`;
+      const leaderBuff = `🎁 ${team.leader.specialtyDescription}`;
+      console.log(`║  ${leaderStatus}`);
+      console.log(`║     ${leaderBuff}`);
     }
     
-    // 显示其他同工
+    // 显示其他同工 - 显示体力和灵力
     if (team.members && team.members.length > 0) {
       team.members.forEach((c) => {
         if (c.isActive) {
-          console.log(`║  ${c.getTeamViewStatus()}`);
+          const memberStatus = `${c.avatarEmoji} ${c.nameChinese}[${c.specialtyName}] 💪${c.stamina}  ✝️${c.spirit}`;
+          const memberBuff = `🎁 ${c.specialtyDescription}`;
+          console.log(`║  ${memberStatus}`);
+          console.log(`║     ${memberBuff}`);
         }
       });
     }
@@ -282,7 +315,7 @@ async function assignCompanionTasks(
 ): Promise<Map<string, CompanionTaskType>> {
   const companionActions = new Map<string, CompanionTaskType>();
   const activeCompanions = game.team.members.filter(
-    (c: Companion) => c.isActive && c.morale >= 20,
+    (c: Companion) => c.isActive && c.spirit >= 20,
   );
 
   if (activeCompanions.length > 0) {

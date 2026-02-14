@@ -6,18 +6,32 @@
 import { ResourceChange, ActionType, CompanionTaskType, SpecialtyType } from './types.js';
 import { COMPANION_TASKS } from './constants.js';
 
+// 专长类型对应的头像 emoji
+const SPECIALTY_AVATARS: Record<SpecialtyType, string> = {
+  preaching: '🎙️',    // 宣道者 - 麦克风
+  counselor: '🤗',    // 劝慰者 - 拥抱
+  resilient: '🛡️',    // 坚韧者 - 盾牌
+  scribe: '📝',       // 书记 - 写作
+  healing: '✋',       // 医治 - 医治的手
+  crafting: '🏕️',     // 织造 - 帐篷
+  teaching: '📚',     // 教师 - 书本
+  defense: '⚔️',      // 辩护 - 剑与盾
+};
+
 class Companion {
   id: string;
   name: string;
   nameChinese: string;
   stamina: number;
   maxStamina: number;
-  morale: number;
+  spirit: number; // 灵力（个人资源）
+  maxSpirit: number;
   specialty: SpecialtyType;
   specialtyName: string;
   specialtyDescription: string;
   isActive: boolean;
   currentTask: CompanionTaskType | null;
+  avatarEmoji: string;
 
   constructor(
     id: string,
@@ -32,12 +46,14 @@ class Companion {
     this.nameChinese = nameChinese;
     this.stamina = 100;
     this.maxStamina = 100;
-    this.morale = 80;
+    this.spirit = 100; // 初始灵力100
+    this.maxSpirit = 200;
     this.specialty = specialty;
     this.specialtyName = specialtyName;
     this.specialtyDescription = specialtyDescription;
     this.isActive = true;
     this.currentTask = null;
+    this.avatarEmoji = SPECIALTY_AVATARS[specialty] || '👤';
   }
 
   applySpecialtyEffect(action: ActionType): ResourceChange {
@@ -56,7 +72,7 @@ class Companion {
         break;
       case 'healing':
         if (action === 'preach' || action === 'disciple') {
-          bonus = { faith: 8, reputation: 3 };
+          bonus = { spirit: 8, reputation: 3 };
         }
         break;
       case 'teaching':
@@ -71,7 +87,7 @@ class Companion {
         break;
       case 'counselor':
         if (action === 'disciple' || action === 'rest') {
-          bonus = { morale: 10, stability: 5 };
+          bonus = { spirit: 10, stability: 5 }; // 劝慰者恢复灵力
         }
         break;
       case 'resilient':
@@ -87,12 +103,6 @@ class Companion {
     }
     
     return bonus;
-  }
-
-  getEfficiency(): number {
-    const staminaRatio = this.stamina / this.maxStamina;
-    const moraleFactor = this.morale / 100;
-    return (staminaRatio * 0.6 + moraleFactor * 0.4);
   }
 
   assignTask(task: CompanionTaskType): { success: boolean; message: string; effect: ResourceChange } {
@@ -112,7 +122,7 @@ class Companion {
     } else if (this.specialty === 'scribe' && task === 'assist_writing') {
       bonusEffect = { reputation: 5 };
     } else if (this.specialty === 'counselor' && task === 'visitation') {
-      bonusEffect = { stability: 5, morale: 5 };
+      bonusEffect = { stability: 5, spirit: 5 }; // 探访恢复灵力
     }
     
     const finalEffect = { ...taskInfo.effect, ...bonusEffect };
@@ -130,27 +140,12 @@ class Companion {
 
   getStatus(): string {
     const statusSymbol = this.isActive ? '✅' : '❌';
-    return `${statusSymbol} ${this.nameChinese}(${this.name}) - 体力: ${this.stamina}/${this.maxStamina}, 士气: ${this.morale}%, 专长: ${this.specialtyName}`;
+    return `${statusSymbol} ${this.nameChinese}(${this.name}) - 体力: ${this.stamina}/${this.maxStamina}, 灵力: ${this.spirit}/${this.maxSpirit}, 专长: ${this.specialtyName}`;
   }
 
-  // 紧凑格式（单行）
-  getCompactStatus(): string {
-    const staminaBar = this.getProgressBar(this.stamina, this.maxStamina, 6);
-    const moraleStr = `${this.morale}%`;
-    const efficiency = Math.round(this.getEfficiency() * 100);
-    return `${this.nameChinese}[${this.specialtyName}] 体:${staminaBar}${moraleStr.padStart(4)} 效:${efficiency.toString().padStart(3)}%`;
-  }
-  
-  // 用于表格的极紧凑格式
-  getUltraCompactStatus(): string {
-    const efficiency = Math.round(this.getEfficiency() * 100);
-    const effSymbol = efficiency >= 80 ? '🟢' : efficiency >= 50 ? '🟡' : '🔴';
-    return `${this.nameChinese}[${this.specialtyName}] 体:${this.stamina.toString().padStart(3)} 士:${this.morale.toString().padStart(3)}% ${effSymbol}`;
-  }
-  
   // 团队视图格式
   getTeamViewStatus(): string {
-    return `${this.nameChinese}[${this.specialtyName}] 💪${this.stamina}  😊${this.morale}%`;
+    return `${this.nameChinese}[${this.specialtyName}] 💪${this.stamina}  ✝️${this.spirit}`;
   }
   
   private getProgressBar(value: number, max: number, width: number): string {

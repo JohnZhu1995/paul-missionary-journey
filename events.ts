@@ -12,7 +12,7 @@ const ANTIOCH_EVENTS: Record<string, GameEvent | DecisionEvent> = {
     type: 'event',
     description: '门徒称为基督徒是从安提阿起首',
     text: '在安提阿的教会中，信徒们被外人称为"基督徒"，这个名字成为了信仰的标志。',
-    effect: { reputation: 10, faith: 5 },
+    effect: { reputation: 10, spirit: 5 },
   },
   paul_barnabas_dispute: {
     id: 'paul_barnabas_dispute',
@@ -22,7 +22,7 @@ const ANTIOCH_EVENTS: Record<string, GameEvent | DecisionEvent> = {
     text: '巴拿巴想要带称呼马可的约翰同去，但保罗以为不带他同去为宜，因为马可从前在旁非利亚离开他们。',
     choices: [
       { label: '坚持己见', description: '保罗认为马可不够忠心，不能同行', effect: { morale: -20, stability: -5 } },
-      { label: '让步', description: '尊重巴拿巴的意见，允许马可同行', effect: { morale: 10, faith: 5 } },
+      { label: '让步', description: '尊重巴拿巴的意见，允许马可同行', effect: { morale: 10, spirit: 5 } },
     ],
   } as DecisionEvent,
   synagogue_dispute: {
@@ -38,8 +38,8 @@ const ANTIOCH_EVENTS: Record<string, GameEvent | DecisionEvent> = {
     name: '巴拿巴的鼓励',
     type: 'event',
     description: '劝慰子巴拿巴的鼓励',
-    text: '巴拿巴用信心和鼓励坚固众人。',
-    effect: { morale: 15, faith: 10, provision: 10 },
+    text: '巴拿巴用灵力和鼓励坚固众人。',
+    effect: { morale: 15, spirit: 10, provision: 10 },
   },
   gentile_inquiry: {
     id: 'gentile_inquiry',
@@ -49,7 +49,7 @@ const ANTIOCH_EVENTS: Record<string, GameEvent | DecisionEvent> = {
     text: '有几个外邦人来到，要听主的道。',
     choices: [
       { label: '热情接待', description: '向外邦人传讲福音', effect: { disciples: 2, reputation: 5 } },
-      { label: '谨慎对待', description: '先观察他们的动机', effect: { faith: 5 } },
+      { label: '谨慎对待', description: '先观察他们的动机', effect: { spirit: 5 } },
     ],
   } as DecisionEvent,
 };
@@ -61,7 +61,7 @@ const PHILIPPI_EVENTS: Record<string, GameEvent | DecisionEvent> = {
     type: 'event',
     description: '卖紫色布匹的妇人吕底亚信主',
     text: '在河边祷告时，你们遇见卖紫色布匹的妇人吕底亚，她敞开心门接受了福音。',
-    effect: { disciples: 1, faith: 10, reputation: 5 },
+    effect: { disciples: 1, spirit: 10, reputation: 5 },
   },
   sila_recruitment: {
     id: 'sila_recruitment',
@@ -124,7 +124,7 @@ const EPHESUS_EVENTS: Record<string, GameEvent | DecisionEvent> = {
     description: '有人擅自奉保罗所传的耶稣赶鬼',
     text: '有几个游方赶鬼的犹太人，擅自奉保罗所传的耶稣赶鬼，结果恶鬼反而制服了他们。',
     choices: [
-      { label: '澄清真理', description: '向众人说明真道', effect: { faith: 10, stability: 10 } },
+      { label: '澄清真理', description: '向众人说明真道', effect: { spirit: 10, stability: 10 } },
       { label: '保持沉默', description: '让事件自然平息', effect: { persecution: -5 } },
     ],
   } as DecisionEvent,
@@ -134,7 +134,7 @@ const EPHESUS_EVENTS: Record<string, GameEvent | DecisionEvent> = {
     type: 'event',
     description: '信徒焚烧邪术书卷',
     text: '那已经信的人，多有来承认诉说自己所行的事，焚烧邪术书卷。',
-    effect: { faith: 20, stability: 15, reputation: 10 },
+    effect: { spirit: 20, stability: 15, reputation: 10 },
   },
   silversmith_riot: {
     id: 'silversmith_riot',
@@ -153,7 +153,7 @@ const LETTER_EVENTS: GameEvent[] = [
     type: 'event',
     description: '你感受到圣灵的感动，要为加拉太的教会写一封信',
     text: '要为加拉太的教会写信，澄清因信称义的真理。',
-    effect: { faith: 20, reputation: 10 },
+    effect: { spirit: 20, reputation: 10 },
   },
   {
     id: 'letter_philippians',
@@ -161,7 +161,7 @@ const LETTER_EVENTS: GameEvent[] = [
     type: 'event',
     description: '想念腓立比教会的同工们',
     text: '想写信鼓励他们无论在什么景况都要喜乐。',
-    effect: { faith: 15, reputation: 8 },
+    effect: { spirit: 15, reputation: 8 },
   },
   {
     id: 'letter_ephesians',
@@ -169,7 +169,7 @@ const LETTER_EVENTS: GameEvent[] = [
     type: 'event',
     description: '神启示教会的奥秘',
     text: '神启示你教会的奥秘——外邦人在基督耶稣里，藉着福音，得以同为后嗣。',
-    effect: { faith: 25, reputation: 12 },
+    effect: { spirit: 25, reputation: 12 },
   },
 ];
 
